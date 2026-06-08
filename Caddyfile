@@ -1,0 +1,36 @@
+# Caddy server config para el frontend público.
+#
+# - Sirve estáticos en /
+# - SPA fallback: cualquier ruta que NO matchee un archivo cae a
+#   index.html (necesario para /m/CODE → index.html parsea el code).
+# - Headers de seguridad razonables.
+# - Compresión gzip + zstd.
+# - Cache largo para assets (no para index.html, que cambia).
+
+:80 {
+	root * /srv
+
+	encode zstd gzip
+
+	# Headers de seguridad (defensa en profundidad — el endpoint
+	# público del API también valida).
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		# Tailwind CDN + el backend API + CDN de fonts.
+		# Si cambiás el dominio del backend, ajustá `connect-src`.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; style-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com; img-src 'self' data: https:; connect-src 'self' https://food.plat.baudity.com; font-src 'self' data:; frame-ancestors 'none'"
+		# index.html no se cachea para poder deployar fixes rápido.
+		?Cache-Control "no-cache"
+	}
+
+	# Cache largo para assets versionados.
+	@assets path *.js *.css *.png *.jpg *.svg *.webp *.woff *.woff2
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	# SPA fallback — sirve index.html para rutas sin archivo.
+	try_files {path} /index.html
+
+	file_server
+}
