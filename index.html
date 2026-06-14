@@ -137,11 +137,27 @@
         perspective-origin: 50% 40%;
       }
 
+      /* Contenedor de páginas: relativo con altura fija porque las
+         páginas hijas se posicionan absolutamente sobre el mismo
+         plano (necesario para que la "preview" de la siguiente quede
+         debajo de la actual durante el flip — sin esto las páginas
+         se apilarían verticalmente). */
+      #book-pages {
+        position: relative;
+        height: calc(100vh - 200px);
+        min-height: 500px;
+        transform-style: preserve-3d;
+      }
+
       /* Cada página es una "hoja" del libro. La textura de papel viene
          de capas superpuestas: gradiente crema base + manchas radiales
-         tenues + vignette de bordes oscurecidos. */
+         tenues + vignette de bordes oscurecidos. Posición absoluta para
+         que TODAS las páginas ocupen el mismo plano — durante el flip
+         podemos ver dos páginas a la vez (la que se levanta y la que
+         queda debajo). */
       .book-page {
-        position: relative;
+        position: absolute;
+        inset: 0;
         background-color: var(--paper-cream);
         background-image:
           /* mancha cálida superior izquierda */
@@ -182,10 +198,7 @@
           0 6px 16px rgba(0, 0, 0, 0.35);
         transform-origin: left center;
         transform-style: preserve-3d;
-        backface-visibility: hidden;
         will-change: transform, box-shadow;
-        height: calc(100vh - 200px);
-        min-height: 500px;
       }
 
       /* Línea ornamental simulando los puntos de costura del lomo. */
@@ -213,74 +226,202 @@
         z-index: 2;
       }
 
-      /* Salida hacia adelante (próxima categoría) — flip largo + sombra
-         que se proyecta. */
+      /* La página siguiente queda visible DEBAJO desde el inicio del
+         flip, con z-index 1 y leve atenuación. Esto es lo que hace que
+         se vea como un libro real: ves la hoja debajo cuando levantas
+         la de arriba. Sin esto el flip se siente "vacío". */
+      .book-page.is-next-preview {
+        display: block;
+        z-index: 1;
+        transform: rotateY(0deg);
+        opacity: 1;
+        filter: brightness(0.96);
+        pointer-events: none;
+      }
+
+      /* Salida hacia adelante (próxima categoría):
+         Tres fases que emulan una hoja real:
+           0-12%: lift — la esquina superior se separa del lomo
+                  (translateZ pequeño + rotación inicial)
+           12-55%: caída — la hoja gira pasando por su cara perpendicular
+           55-100%: aterrizaje — la hoja cae plana del otro lado
+         La curve de cada fase es distinta para que el movimiento se
+         sienta orgánico, no robótico. */
       .book-page.is-leaving-forward {
-        animation: pageOutForward 780ms cubic-bezier(0.45, 0.05, 0.35, 0.95) forwards;
+        animation: pageOutForward 950ms cubic-bezier(0.42, 0, 0.25, 1) forwards;
         z-index: 3;
+        transform-origin: left center;
       }
       .book-page.is-entering-forward {
-        animation: pageInForward 780ms cubic-bezier(0.45, 0.05, 0.35, 0.95) forwards;
+        animation: pageInForward 950ms ease-out forwards;
         z-index: 2;
       }
       .book-page.is-leaving-backward {
-        animation: pageOutBackward 780ms cubic-bezier(0.45, 0.05, 0.35, 0.95) forwards;
+        animation: pageOutBackward 950ms cubic-bezier(0.42, 0, 0.25, 1) forwards;
         z-index: 3;
+        transform-origin: right center;
       }
       .book-page.is-entering-backward {
-        animation: pageInBackward 780ms cubic-bezier(0.45, 0.05, 0.35, 0.95) forwards;
+        animation: pageInBackward 950ms ease-out forwards;
         z-index: 2;
       }
       .book-page.is-hidden { display: none; }
 
+      /* OVERLAY de luz/curl — pseudo-elemento que aparece sobre la
+         página solo durante el flip. Es un gradient que recorre la
+         página simulando que la luz se refleja en el papel curvado.
+         La luz se mueve de izquierda a derecha (forward) o derecha
+         a izquierda (backward), enfatizando la sensación de
+         curvatura física. */
+      .book-page.is-leaving-forward::after,
+      .book-page.is-leaving-backward::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+        z-index: 1;
+        background: linear-gradient(
+          to right,
+          rgba(255, 240, 200, 0) 0%,
+          rgba(255, 240, 200, 0.18) 35%,
+          rgba(255, 255, 230, 0.42) 50%,
+          rgba(0, 0, 0, 0.15) 75%,
+          rgba(0, 0, 0, 0.40) 100%
+        );
+        animation: curlSheen 950ms cubic-bezier(0.42, 0, 0.25, 1) forwards;
+        mix-blend-mode: overlay;
+      }
+      .book-page.is-leaving-backward::after {
+        animation: curlSheenBack 950ms cubic-bezier(0.42, 0, 0.25, 1) forwards;
+      }
+      @keyframes curlSheen {
+        0%   { opacity: 0; transform: translateX(-20%); }
+        15%  { opacity: 1; }
+        85%  { opacity: 1; }
+        100% { opacity: 0; transform: translateX(20%); }
+      }
+      @keyframes curlSheenBack {
+        0%   { opacity: 0; transform: translateX(20%); }
+        15%  { opacity: 1; }
+        85%  { opacity: 1; }
+        100% { opacity: 0; transform: translateX(-20%); }
+      }
+
       @keyframes pageOutForward {
         0% {
-          transform: rotateY(0deg);
-          filter: brightness(1);
+          transform: perspective(1800px) translateZ(0) rotateY(0deg);
           box-shadow:
             inset 8px 0 24px -8px rgba(0, 0, 0, 0.30),
             0 18px 50px rgba(0, 0, 0, 0.55);
         }
-        45% {
-          filter: brightness(0.85);
+        /* Lift: la hoja se separa del libro y empieza a inclinarse */
+        12% {
+          transform: perspective(1800px) translateZ(20px) rotateY(-12deg);
           box-shadow:
-            inset 8px 0 24px -8px rgba(0, 0, 0, 0.50),
-            -10px 25px 50px rgba(0, 0, 0, 0.65);
+            inset 8px 0 28px -8px rgba(0, 0, 0, 0.45),
+            -8px 28px 40px rgba(0, 0, 0, 0.55);
         }
+        /* Mitad del giro — la hoja está casi perpendicular */
+        50% {
+          transform: perspective(1800px) translateZ(30px) rotateY(-90deg);
+          box-shadow:
+            inset 0 0 40px rgba(0, 0, 0, 0.55),
+            -18px 30px 60px rgba(0, 0, 0, 0.70);
+        }
+        /* Cae del otro lado, casi planchada — el ángulo final no es
+           exactamente -180 sino -178 para que la sombra del lomo
+           todavía proyecte realista (un -180 exacto colapsaría el
+           plano y desaparecería la sombra). */
         100% {
-          transform: rotateY(-178deg);
-          filter: brightness(0.55);
+          transform: perspective(1800px) translateZ(0) rotateY(-178deg);
           box-shadow:
             inset 8px 0 30px -8px rgba(0, 0, 0, 0.70),
             -28px 18px 60px rgba(0, 0, 0, 0.75);
         }
       }
       @keyframes pageInForward {
-        0%   { transform: rotateY(0deg); opacity: 0.4; filter: brightness(0.85); }
-        100% { transform: rotateY(0deg); opacity: 1;   filter: brightness(1); }
+        /* La página entrante NO se mueve — ya estaba como
+           is-next-preview. Solo subimos su opacidad un toque al final
+           y normalizamos su brillo. Esto da el efecto "hoja queda
+           descansando". */
+        0%   { opacity: 1; filter: brightness(0.92); transform: rotateY(0deg); }
+        50%  { filter: brightness(0.95); }
+        100% { opacity: 1; filter: brightness(1); transform: rotateY(0deg); }
       }
+
       @keyframes pageOutBackward {
         0% {
-          transform: rotateY(0deg);
-          filter: brightness(1);
-        }
-        45% {
-          filter: brightness(0.85);
+          transform: perspective(1800px) translateZ(0) rotateY(0deg);
           box-shadow:
-            inset 8px 0 24px -8px rgba(0, 0, 0, 0.50),
-            10px 25px 50px rgba(0, 0, 0, 0.65);
+            inset -8px 0 24px -8px rgba(0, 0, 0, 0.30),
+            0 18px 50px rgba(0, 0, 0, 0.55);
+        }
+        12% {
+          transform: perspective(1800px) translateZ(20px) rotateY(12deg);
+          box-shadow:
+            inset -8px 0 28px -8px rgba(0, 0, 0, 0.45),
+            8px 28px 40px rgba(0, 0, 0, 0.55);
+        }
+        50% {
+          transform: perspective(1800px) translateZ(30px) rotateY(90deg);
+          box-shadow:
+            inset 0 0 40px rgba(0, 0, 0, 0.55),
+            18px 30px 60px rgba(0, 0, 0, 0.70);
         }
         100% {
-          transform: rotateY(178deg);
-          filter: brightness(0.55);
+          transform: perspective(1800px) translateZ(0) rotateY(178deg);
           box-shadow:
-            inset 8px 0 30px -8px rgba(0, 0, 0, 0.70),
+            inset -8px 0 30px -8px rgba(0, 0, 0, 0.70),
             28px 18px 60px rgba(0, 0, 0, 0.75);
         }
       }
       @keyframes pageInBackward {
-        0%   { transform: rotateY(0deg); opacity: 0.4; filter: brightness(0.85); }
-        100% { transform: rotateY(0deg); opacity: 1;   filter: brightness(1); }
+        0%   { opacity: 1; filter: brightness(0.92); transform: rotateY(0deg); }
+        50%  { filter: brightness(0.95); }
+        100% { opacity: 1; filter: brightness(1); transform: rotateY(0deg); }
+      }
+
+      /* BACKFACE de la hoja — un div hijo posicionado con rotateY(180)
+         para que se vea ÚNICAMENTE cuando la página rota más allá de
+         90° (en ese momento la cara frontal apunta hacia atrás y el
+         backface-visibility la oculta; la back, que estaba apuntando
+         hacia atrás al inicio, ahora apunta hacia el espectador).
+         Sin esta backface, durante el giro se ve un "agujero" o se
+         pasa de la cara frontal a vacío. */
+      .book-page-back {
+        position: absolute;
+        inset: 0;
+        background-color: var(--paper-cream-deep);
+        background-image:
+          radial-gradient(
+            ellipse 60% 40% at 82% 90%,
+            rgba(0, 0, 0, 0.10) 0%,
+            transparent 60%
+          ),
+          radial-gradient(
+            ellipse 40% 30% at 15% 15%,
+            rgba(0, 0, 0, 0.06) 0%,
+            transparent 60%
+          ),
+          linear-gradient(
+            to left,
+            rgba(0, 0, 0, 0.15) 0%,
+            transparent 10%,
+            transparent 90%,
+            rgba(0, 0, 0, 0.08) 100%
+          );
+        border-radius: 12px 3px 3px 12px;
+        transform: rotateY(180deg) translateZ(1px);
+        backface-visibility: hidden;
+        pointer-events: none;
+      }
+
+      /* La página necesita preserve-3d para que el backface se posicione
+         correctamente en 3D y backface-visibility en su cara frontal
+         para que se oculte cuando rota más allá de 90°. */
+      .book-page-inner {
+        backface-visibility: hidden;
       }
 
       /* Lomo y bookmark del libro. */
@@ -902,6 +1043,6 @@
       no se actualiza, el browser puede ejecutar JS nuevo con HTML
       viejo (o al revés) y todo revienta con errores tipo null.
     -->
-    <script src="./app.js?v=20260614-2"></script>
+    <script src="./app.js?v=20260614-3"></script>
   </body>
 </html>

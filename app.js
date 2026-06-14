@@ -356,6 +356,14 @@
     page.dataset.categoryId = cat.id;
     page.dataset.idx = String(idx);
 
+    // Backface: el "reverso" de la hoja, visible durante el flip
+    // cuando la página pasa la marca de 90°. Sin esto el flip se ve
+    // como un agujero porque la cara frontal está oculta y no hay
+    // nada que pintar atrás.
+    const back = document.createElement('div');
+    back.className = 'book-page-back';
+    page.appendChild(back);
+
     const inner = document.createElement('div');
     inner.className = 'book-page-inner';
 
@@ -425,18 +433,28 @@
     const forward = targetIdx > state.bookIndex;
     state.bookAnimating = true;
 
-    // Página entrante: arranca visible debajo, sin animación de salida.
+    // PASO 1 — Mostrar la página destino DEBAJO (preview).
+    // Esto es lo que da la sensación de libro real: cuando levantas
+    // la página actual, ves la siguiente ya esperando abajo. Sin
+    // esto, durante el flip se ve un agujero negro y la siguiente
+    // página "aparece" de la nada al final.
     target.classList.remove('is-hidden');
     target.classList.remove('is-active');
-    target.classList.add(
-      forward ? 'is-entering-forward' : 'is-entering-backward',
-    );
+    target.classList.add('is-next-preview');
 
-    // Página saliente: flip.
-    current.classList.remove('is-active');
-    current.classList.add(
-      forward ? 'is-leaving-forward' : 'is-leaving-backward',
-    );
+    // PASO 2 — Empezar el flip de la página saliente.
+    // Usamos requestAnimationFrame doble para asegurar que el browser
+    // primero pintó el preview antes de empezar la animación —
+    // así el preview NO se ve "aparecer" sino que ya está ahí cuando
+    // la página de arriba empieza a levantarse.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        current.classList.remove('is-active');
+        current.classList.add(
+          forward ? 'is-leaving-forward' : 'is-leaving-backward',
+        );
+      });
+    });
 
     const onEnd = () => {
       current.removeEventListener('animationend', onEnd);
@@ -445,10 +463,7 @@
         'is-leaving-backward',
       );
       current.classList.add('is-hidden');
-      target.classList.remove(
-        'is-entering-forward',
-        'is-entering-backward',
-      );
+      target.classList.remove('is-next-preview');
       target.classList.add('is-active');
       state.bookIndex = targetIdx;
       state.activeCategoryId = state.categories[targetIdx].id;
