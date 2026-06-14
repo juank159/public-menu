@@ -127,6 +127,25 @@
     } catch (_) {}
   }
 
+  /**
+   * Agrega una línea al carrito fusionando con una existente si coincide
+   * en producto + variante + notas. Distinta variante o distinta nota =
+   * línea separada (intencional: la cocina ve cada combinación aparte).
+   */
+  function addLine(line) {
+    const existingIdx = state.cart.findIndex(
+      (it) =>
+        it.product_id === line.product_id &&
+        (it.variant_id || '') === (line.variant_id || '') &&
+        (it.special_instructions || '') === (line.special_instructions || ''),
+    );
+    if (existingIdx >= 0) {
+      state.cart[existingIdx].quantity += line.quantity;
+    } else {
+      state.cart.push(line);
+    }
+  }
+
   // ---------------------------------------------------------------
   // API
   // ---------------------------------------------------------------
@@ -668,6 +687,28 @@
     });
   }
 
+  /// Variantes "limpias" de un producto: solo las disponibles, con el
+  /// precio ABSOLUTO ya calculado (base_price + price_modifier) para no
+  /// recalcularlo en cada render. Si el producto no tiene variantes
+  /// devuelve []. El backend ya filtra is_available, pero defendemos.
+  function normalizeVariants(product) {
+    const base = Number(product.base_price) || 0;
+    return (product.variants || []).map((v) => ({
+      id: v.id,
+      name: v.name,
+      price: base + (Number(v.price_modifier) || 0),
+      is_default: !!v.is_default,
+    }));
+  }
+
+  /// Precio mínimo a mostrar como "desde $X" cuando hay variantes.
+  function minVariantPrice(variants) {
+    return variants.reduce(
+      (min, v) => (v.price < min ? v.price : min),
+      variants[0].price,
+    );
+  }
+
   function buildProductCard(product) {
     // Card "menu-item" estilo carta impresa: nombre en serifa, puntos
     // hasta el precio, descripción en cursiva. Sin border-radius / fondo
@@ -678,15 +719,26 @@
 
     const hasImage = !!product.image_url;
     const badgeText = product.badge || product.badge_label;
+    const variants = normalizeVariants(product);
+    const hasVariants = variants.length > 0;
     const hasDiscount =
+      !hasVariants &&
       product.special_price != null &&
       product.special_price < product.base_price;
 
-    const priceHtml = hasDiscount
-      ? `<span class="strike">${fmt(product.base_price)}</span>${fmt(
-          product.effective_price ?? product.special_price,
-        )}`
-      : fmt(product.effective_price ?? product.base_price);
+    let priceHtml;
+    if (hasVariants) {
+      // Con variantes el precio del plato no es único — mostramos "desde".
+      priceHtml = `<span class="from">desde</span>${fmt(
+        minVariantPrice(variants),
+      )}`;
+    } else if (hasDiscount) {
+      priceHtml = `<span class="strike">${fmt(product.base_price)}</span>${fmt(
+        product.effective_price ?? product.special_price,
+      )}`;
+    } else {
+      priceHtml = fmt(product.effective_price ?? product.base_price);
+    }
 
     card.innerHTML = `
       ${
@@ -709,7 +761,27 @@
             : ''
         }
       </div>
+      <button class="menu-item-add btn-press" type="button" aria-label="Agregar ${escapeAttr(
+        product.name,
+      )}">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </button>
     `;
+
+    // El "+" agrega sin abrir el modal cuando el plato no tiene variantes;
+    // si tiene, abrimos el modal para que el cliente elija cuál. En ambos
+    // casos `stopPropagation` evita que también dispare el onclick de la card.
+    const addBtn = card.querySelector('.menu-item-add');
+    addBtn.onclick = (ev) => {
+      ev.stopPropagation();
+      if (hasVariants) {
+        App.openProduct(product);
+      } else {
+        App.quickAdd(product, addBtn);
+      }
+    };
     return card;
   }
 
@@ -719,86 +791,105 @@
   let modalProductState = null;
 
   function renderProductModal(product) {
-    const effectivePrice = Number(
-      product.effective_price ??
-        product.special_price ??
-        product.base_price ??
-        0,
-    );
+    const variants = normalizeVariants(product);
+    const hasVariants = variants.length > 0;
+
+    // Variante por defecto: la marcada is_default, o la primera. El
+    // precio del modal arranca según la variante seleccionada; sin
+    // variantes usamos el effective_price del producto.
+    let selectedVariantIdx = -1;
+    let unitPrice;
+    if (hasVariants) {
+      const defIdx = variants.findIndex((v) => v.is_default);
+      selectedVariantIdx = defIdx >= 0 ? defIdx : 0;
+      unitPrice = variants[selectedVariantIdx].price;
+    } else {
+      unitPrice = Number(
+        product.effective_price ??
+          product.special_price ??
+          product.base_price ??
+          0,
+      );
+    }
+
     modalProductState = {
       product,
+      variants,
+      selectedVariantIdx,
       quantity: 1,
       special_instructions: '',
-      unit_price: effectivePrice,
+      unit_price: unitPrice,
     };
+
+    const variantsHtml = hasVariants
+      ? `
+        <div class="pm-section-label">Elegí una opción</div>
+        <div class="pm-variants">
+          ${variants
+            .map(
+              (v, i) => `
+            <button
+              type="button"
+              class="pm-variant btn-press ${i === selectedVariantIdx ? 'is-selected' : ''}"
+              data-variant-idx="${i}"
+              onclick="App.selectVariant(${i})"
+            >
+              <span class="pm-variant-radio"></span>
+              <span class="pm-variant-name">${escapeHtml(v.name)}</span>
+              <span class="pm-variant-price">${fmt(v.price)}</span>
+            </button>`,
+            )
+            .join('')}
+        </div>`
+      : '';
 
     const root = $('product-detail');
     root.innerHTML = `
+      <div class="sheet-handle"></div>
       ${
         product.image_url
-          ? `<img src="${escapeAttr(
-              product.image_url,
-            )}" alt="" class="w-full h-56 object-cover rounded-2xl mb-4" />`
+          ? `<img src="${escapeAttr(product.image_url)}" alt="" class="pm-img" />`
           : ''
       }
-      <div class="flex justify-between items-start gap-3 mb-1">
-        <h2 class="text-2xl font-bold flex-1">${escapeHtml(product.name)}</h2>
-        <button
-          onclick="App.closeProduct(true)"
-          class="text-slate-400 hover:text-slate-700 -mr-2 -mt-1 p-2"
-          aria-label="Cerrar"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+      <div class="pm-head">
+        <h2 class="pm-title">${escapeHtml(product.name)}</h2>
+        <button class="pm-close btn-press" onclick="App.closeProduct(true)" aria-label="Cerrar">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
             <path d="M6 6L18 18M6 18L18 6" stroke-linecap="round" />
           </svg>
         </button>
       </div>
       ${
         product.description
-          ? `<p class="text-slate-600 mb-4">${escapeHtml(
-              product.description,
-            )}</p>`
+          ? `<p class="pm-desc">${escapeHtml(product.description)}</p>`
           : ''
       }
-      <div class="text-2xl font-bold text-brand mb-5">${fmt(
-        effectivePrice,
-      )}</div>
+      <div class="pm-price" id="prod-price">${fmt(unitPrice)}</div>
 
-      <label class="block text-sm font-semibold text-slate-700 mb-1.5">
-        Notas para la cocina (opcional)
-      </label>
+      ${variantsHtml}
+
+      <div class="pm-section-label">Notas para la cocina (opcional)</div>
       <textarea
         id="prod-notes"
+        class="pm-notes"
         rows="2"
         maxlength="300"
         placeholder="Ej: sin cebolla, bien cocido…"
-        class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm resize-none focus:border-brand focus:outline-none mb-5"
         oninput="App.updateNotes(this.value)"
       ></textarea>
 
-      <div class="flex items-center justify-between gap-4 mb-5">
-        <span class="font-semibold">Cantidad</span>
-        <div class="flex items-center gap-3 bg-slate-100 rounded-full p-1">
-          <button
-            onclick="App.changeQty(-1)"
-            class="w-10 h-10 rounded-full bg-white shadow font-bold text-xl btn-press"
-            aria-label="Disminuir"
-          >−</button>
-          <span id="prod-qty" class="font-bold w-6 text-center">1</span>
-          <button
-            onclick="App.changeQty(1)"
-            class="w-10 h-10 rounded-full bg-white shadow font-bold text-xl btn-press"
-            aria-label="Aumentar"
-          >+</button>
+      <div class="pm-qty-row">
+        <span class="pm-qty-label">Cantidad</span>
+        <div class="pm-qty">
+          <button class="pm-qty-btn" onclick="App.changeQty(-1)" aria-label="Disminuir">−</button>
+          <span id="prod-qty" class="pm-qty-val">1</span>
+          <button class="pm-qty-btn" onclick="App.changeQty(1)" aria-label="Aumentar">+</button>
         </div>
       </div>
 
-      <button
-        onclick="App.addToCart()"
-        class="w-full bg-brand hover:bg-brand-dark text-white py-4 rounded-2xl font-bold btn-press flex justify-between px-5"
-      >
+      <button class="pm-add btn-press" onclick="App.addToCart()">
         <span>Agregar al pedido</span>
-        <span id="prod-total">${fmt(effectivePrice)}</span>
+        <span id="prod-total" class="pm-add-total">${fmt(unitPrice)}</span>
       </button>
     `;
     $('modal-product').classList.remove('hidden');
@@ -814,18 +905,21 @@
       0,
     );
 
+    const closeBtn = `
+      <button class="pm-close btn-press" onclick="App.closeCart(true)" aria-label="Cerrar">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M6 6L18 18M6 18L18 6" stroke-linecap="round" />
+        </svg>
+      </button>`;
+
     if (state.cart.length === 0) {
       root.innerHTML = `
-        <div class="flex justify-between items-center mb-4">
-          <h2 class="text-2xl font-bold">Mi pedido</h2>
-          <button onclick="App.closeCart(true)" class="text-slate-400 p-2 -mr-2"
-                  aria-label="Cerrar">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M6 6L18 18M6 18L18 6" stroke-linecap="round" />
-            </svg>
-          </button>
+        <div class="sheet-handle"></div>
+        <div class="cart-head">
+          <h2 class="cart-title">Mi pedido</h2>
+          ${closeBtn}
         </div>
-        <p class="text-slate-500 text-center py-10">Tu pedido está vacío.</p>
+        <p class="cart-empty">Tu pedido está vacío.</p>
       `;
       $('modal-cart').classList.remove('hidden');
       return;
@@ -834,28 +928,27 @@
     const itemsHtml = state.cart
       .map(
         (item, i) => `
-        <div class="flex gap-3 py-3 border-b border-slate-100 last:border-0">
-          <div class="flex-1 min-w-0">
-            <p class="font-semibold truncate">${escapeHtml(item.name)}</p>
+        <div class="cart-row">
+          <div style="flex: 1; min-width: 0;">
+            <p class="cart-row-name">${escapeHtml(item.name)}</p>
             ${
-              item.special_instructions
-                ? `<p class="text-xs text-slate-500 mt-0.5">${escapeHtml(
-                    item.special_instructions,
-                  )}</p>`
+              item.variant_name
+                ? `<p class="cart-row-sub">${escapeHtml(item.variant_name)}</p>`
                 : ''
             }
-            <p class="text-sm text-slate-600 mt-0.5">${fmt(
-              item.unit_price,
-            )} c/u</p>
+            ${
+              item.special_instructions
+                ? `<p class="cart-row-sub">“${escapeHtml(
+                    item.special_instructions,
+                  )}”</p>`
+                : ''
+            }
+            <p class="cart-row-price">${fmt(item.unit_price)} c/u</p>
           </div>
-          <div class="flex items-center gap-2">
-            <div class="flex items-center gap-2 bg-slate-100 rounded-full px-1 py-1">
-              <button onclick="App.updateCartQty(${i}, -1)"
-                      class="w-7 h-7 rounded-full bg-white font-bold btn-press">−</button>
-              <span class="font-bold w-5 text-center">${item.quantity}</span>
-              <button onclick="App.updateCartQty(${i}, 1)"
-                      class="w-7 h-7 rounded-full bg-white font-bold btn-press">+</button>
-            </div>
+          <div class="cart-stepper">
+            <button class="cart-step-btn" onclick="App.updateCartQty(${i}, -1)" aria-label="Quitar uno">−</button>
+            <span class="cart-step-val">${item.quantity}</span>
+            <button class="cart-step-btn" onclick="App.updateCartQty(${i}, 1)" aria-label="Agregar uno">+</button>
           </div>
         </div>
       `,
@@ -863,73 +956,58 @@
       .join('');
 
     root.innerHTML = `
-      <div class="flex justify-between items-center mb-3">
-        <h2 class="text-2xl font-bold">Mi pedido</h2>
-        <button onclick="App.closeCart(true)" class="text-slate-400 p-2 -mr-2"
-                aria-label="Cerrar">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <path d="M6 6L18 18M6 18L18 6" stroke-linecap="round" />
-          </svg>
-        </button>
+      <div class="sheet-handle"></div>
+      <div class="cart-head">
+        <h2 class="cart-title">Mi pedido</h2>
+        ${closeBtn}
       </div>
 
-      <div class="space-y-0 mb-4">${itemsHtml}</div>
+      <div>${itemsHtml}</div>
 
-      <div class="flex justify-between text-lg font-bold py-3 border-t border-slate-200">
-        <span>Total</span>
-        <span class="text-brand">${fmt(total)}</span>
+      <div class="cart-total-row">
+        <span class="l">Total</span>
+        <span class="v">${fmt(total)}</span>
       </div>
 
-      <div class="mt-5">
-        <label class="block text-sm font-semibold mb-1">
-          Tu nombre <span class="text-red-500">*</span>
-        </label>
-        <input
-          id="cust-name"
-          type="text"
-          maxlength="100"
-          placeholder="Ej: Juan Pérez"
-          class="w-full border border-slate-300 rounded-xl px-3 py-3 mb-3 focus:border-brand focus:outline-none"
-        />
+      <label class="cart-field-label">Tu nombre <span class="req">*</span></label>
+      <input
+        id="cust-name"
+        class="cart-input"
+        type="text"
+        maxlength="100"
+        placeholder="Ej: Juan Pérez"
+      />
 
-        <label class="block text-sm font-semibold mb-1">
-          Teléfono <span class="text-red-500">*</span>
-        </label>
-        <input
-          id="cust-phone"
-          type="tel"
-          inputmode="tel"
-          maxlength="20"
-          placeholder="Ej: 3001234567"
-          class="w-full border border-slate-300 rounded-xl px-3 py-3 mb-3 focus:border-brand focus:outline-none"
-        />
+      <label class="cart-field-label">Teléfono <span class="req">*</span></label>
+      <input
+        id="cust-phone"
+        class="cart-input"
+        type="tel"
+        inputmode="tel"
+        maxlength="20"
+        placeholder="Ej: 3001234567"
+      />
 
-        <label class="block text-sm font-semibold mb-1">
-          Notas para el mesero (opcional)
-        </label>
-        <textarea
-          id="order-notes"
-          rows="2"
-          maxlength="500"
-          placeholder="Ej: cumpleaños, sin gluten…"
-          class="w-full border border-slate-300 rounded-xl px-3 py-2 text-sm resize-none focus:border-brand focus:outline-none mb-4"
-        ></textarea>
+      <label class="cart-field-label">Notas para el mesero (opcional)</label>
+      <textarea
+        id="order-notes"
+        class="cart-input"
+        rows="2"
+        maxlength="500"
+        placeholder="Ej: cumpleaños, sin gluten…"
+        style="resize: none;"
+      ></textarea>
 
-        <button
-          id="submit-btn"
-          onclick="App.submitOrder()"
-          class="w-full bg-brand hover:bg-brand-dark text-white py-4 rounded-2xl font-bold btn-press disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          Enviar pedido
-        </button>
+      <button id="submit-btn" class="cart-submit btn-press" onclick="App.submitOrder()">
+        Enviar pedido
+      </button>
 
-        <p id="submit-error" class="hidden mt-3 text-sm text-red-600"></p>
+      <p id="submit-error" class="cart-error hidden"></p>
 
-        <p class="text-xs text-slate-500 mt-3 leading-relaxed">
-          El mesero confirmará tu pedido antes de mandarlo a la cocina.
-          El pago se hace en caja al terminar.
-        </p>
-      </div>
+      <p class="cart-note">
+        El mesero confirmará tu pedido antes de mandarlo a la cocina.
+        El pago se hace en caja al terminar.
+      </p>
     `;
     $('modal-cart').classList.remove('hidden');
   }
@@ -989,8 +1067,7 @@
     const stage = payload.stage || 'pending_review';
     const stageMeta = stageVisual(stage);
 
-    $('track-icon').className =
-      `w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-5 transition-colors ${stageMeta.bg}`;
+    $('track-icon').className = `track-icon-wrap ${stageMeta.bg}`;
     $('track-icon').innerHTML = stageMeta.icon;
 
     $('track-title').textContent = stageMeta.title;
@@ -1006,10 +1083,10 @@
     itemsEl.innerHTML = '';
     (payload.items || []).forEach((it) => {
       const row = document.createElement('div');
-      row.className = 'flex justify-between text-sm';
+      row.className = 'track-item';
       row.innerHTML = `
-        <span class="text-slate-700">
-          <span class="font-bold text-brand">${it.quantity}×</span>
+        <span>
+          <span class="track-item-q">${it.quantity}×</span>
           ${escapeHtml(it.name)}
         </span>
       `;
@@ -1017,7 +1094,7 @@
 
       if (it.special_instructions) {
         const note = document.createElement('div');
-        note.className = 'text-xs text-slate-500 italic pl-5';
+        note.className = 'track-item-note';
         note.textContent = it.special_instructions;
         itemsEl.appendChild(note);
       }
@@ -1035,11 +1112,13 @@
   }
 
   function stageVisual(stage) {
+    // El color del trazo lo hereda el SVG vía `currentColor` desde la
+    // clase `track-icon-*` del wrapper (definidas en index.html).
     switch (stage) {
       case 'pending_review':
         return {
-          bg: 'bg-amber-100',
-          icon: `<svg class="w-12 h-12 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          bg: 'track-icon-amber',
+          icon: `<svg width="44" height="44" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M12 8v4l3 3M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>`,
@@ -1048,8 +1127,8 @@
         };
       case 'preparing':
         return {
-          bg: 'bg-orange-100',
-          icon: `<svg class="w-12 h-12 text-brand" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          bg: 'track-icon-brand',
+          icon: `<svg width="44" height="44" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
                 </svg>`,
@@ -1058,8 +1137,8 @@
         };
       case 'ready':
         return {
-          bg: 'bg-emerald-100',
-          icon: `<svg class="w-12 h-12 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          bg: 'track-icon-green',
+          icon: `<svg width="44" height="44" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
                 </svg>`,
           title: '¡Pedido listo!',
@@ -1068,8 +1147,8 @@
       case 'delivered':
       case 'completed':
         return {
-          bg: 'bg-emerald-100',
-          icon: `<svg class="w-12 h-12 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          bg: 'track-icon-green',
+          icon: `<svg width="44" height="44" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
                 </svg>`,
@@ -1078,8 +1157,8 @@
         };
       case 'cancelled':
         return {
-          bg: 'bg-red-100',
-          icon: `<svg class="w-12 h-12 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          bg: 'track-icon-red',
+          icon: `<svg width="44" height="44" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M6 18L18 6M6 6l12 12"/>
                 </svg>`,
@@ -1088,7 +1167,7 @@
         };
       default:
         return {
-          bg: 'bg-slate-100',
+          bg: 'track-icon-muted',
           icon: '',
           title: 'Procesando…',
           fallbackMessage: '',
@@ -1109,15 +1188,16 @@
 
     // Línea vertical que conecta los círculos.
     const line = document.createElement('div');
-    line.className = 'absolute left-3 top-2 bottom-2 w-0.5 bg-slate-200';
+    line.className = 'tl-line';
     root.appendChild(line);
 
     TRACKING_STEPS.forEach((step, idx) => {
       const isDone = idx < currentIdx;
       const isCurrent = idx === currentIdx;
+      const stateClass = isDone ? 'done' : isCurrent ? 'current' : 'todo';
 
       const row = document.createElement('div');
-      row.className = 'relative flex items-start gap-3 pb-5 last:pb-0';
+      row.className = 'tl-row';
 
       // Timestamp del paso si lo tenemos.
       let timestamp = '';
@@ -1131,28 +1211,14 @@
         const dt = new Date(tsField);
         const hh = String(dt.getHours()).padStart(2, '0');
         const mm = String(dt.getMinutes()).padStart(2, '0');
-        timestamp = `<div class="text-xs text-slate-400 mt-0.5">${hh}:${mm}</div>`;
-      }
-
-      let dotClass, labelClass;
-      if (isDone) {
-        dotClass = 'bg-emerald-500 border-emerald-500 text-white';
-        labelClass = 'text-slate-500 font-medium';
-      } else if (isCurrent) {
-        dotClass = 'bg-brand border-brand text-white animate-pulse';
-        labelClass = 'text-brand font-bold';
-      } else {
-        dotClass = 'bg-white border-slate-300 text-slate-300';
-        labelClass = 'text-slate-400';
+        timestamp = `<div class="tl-time">${hh}:${mm}</div>`;
       }
 
       row.innerHTML = `
-        <div class="relative z-10 w-6 h-6 rounded-full border-2 ${dotClass} flex items-center justify-center text-xs font-bold flex-shrink-0">
-          ${isDone ? '✓' : idx + 1}
-        </div>
-        <div class="flex-1 -mt-0.5">
-          <div class="${labelClass} text-sm">${step.label}</div>
-          <div class="text-xs text-slate-400">${step.sub}</div>
+        <div class="tl-dot ${stateClass}">${isDone ? '✓' : idx + 1}</div>
+        <div style="flex: 1;">
+          <div class="tl-label ${stateClass}">${step.label}</div>
+          <div class="tl-sub">${step.sub}</div>
           ${timestamp}
         </div>
       `;
@@ -1238,6 +1304,32 @@
       modalProductState = null;
     },
 
+    /// Selección de variante dentro del modal. Actualiza el precio
+    /// unitario + los totales en el DOM sin re-renderizar todo el modal
+    /// (así no perdemos lo que el cliente ya escribió en las notas).
+    selectVariant(idx) {
+      if (!modalProductState) return;
+      const variant = modalProductState.variants[idx];
+      if (!variant) return;
+      modalProductState.selectedVariantIdx = idx;
+      modalProductState.unit_price = variant.price;
+
+      // Marcar visualmente la opción elegida.
+      const root = $('product-detail');
+      root.querySelectorAll('.pm-variant').forEach((el) => {
+        el.classList.toggle(
+          'is-selected',
+          Number(el.dataset.variantIdx) === idx,
+        );
+      });
+
+      // Refrescar precio mostrado + total del botón "Agregar".
+      $('prod-price').textContent = fmt(variant.price);
+      $('prod-total').textContent = fmt(
+        variant.price * modalProductState.quantity,
+      );
+    },
+
     changeQty(delta) {
       if (!modalProductState) return;
       const next = Math.max(1, modalProductState.quantity + delta);
@@ -1253,31 +1345,58 @@
       modalProductState.special_instructions = value;
     },
 
+    /// Agregado rápido desde el "+" de la card (solo productos SIN
+    /// variantes — los que tienen variante abren el modal para elegir).
+    /// Suma cantidad 1 sin notas, con un pulso visual de confirmación.
+    quickAdd(product, btnEl) {
+      const unit_price = Number(
+        product.effective_price ??
+          product.special_price ??
+          product.base_price ??
+          0,
+      );
+      addLine({
+        product_id: product.id,
+        variant_id: undefined,
+        variant_name: '',
+        name: product.name,
+        unit_price,
+        quantity: 1,
+        special_instructions: '',
+      });
+      persistCart();
+      renderCartFab();
+      if (btnEl) {
+        btnEl.classList.remove('pulsing');
+        // reflow para reiniciar la animación si se toca rápido seguido
+        void btnEl.offsetWidth;
+        btnEl.classList.add('pulsing');
+      }
+    },
+
     addToCart() {
       if (!modalProductState) return;
-      const { product, quantity, special_instructions, unit_price } =
-        modalProductState;
+      const {
+        product,
+        quantity,
+        special_instructions,
+        unit_price,
+        variants,
+        selectedVariantIdx,
+      } = modalProductState;
 
-      // Si ya existe el mismo producto con las MISMAS notas, sumamos
-      // cantidad en vez de duplicar línea. Si las notas difieren se
-      // crea otra línea (intencional: cocina ve cada nota separada).
-      const existingIdx = state.cart.findIndex(
-        (it) =>
-          it.product_id === product.id &&
-          (it.special_instructions || '') === (special_instructions || ''),
-      );
+      const variant =
+        selectedVariantIdx >= 0 ? variants[selectedVariantIdx] : null;
 
-      if (existingIdx >= 0) {
-        state.cart[existingIdx].quantity += quantity;
-      } else {
-        state.cart.push({
-          product_id: product.id,
-          name: product.name,
-          unit_price,
-          quantity,
-          special_instructions: special_instructions || '',
-        });
-      }
+      addLine({
+        product_id: product.id,
+        variant_id: variant ? variant.id : undefined,
+        variant_name: variant ? variant.name : '',
+        name: product.name,
+        unit_price,
+        quantity,
+        special_instructions: special_instructions || '',
+      });
       persistCart();
       renderCartFab();
       App.closeProduct(true);
@@ -1354,6 +1473,7 @@
           notes: notes || undefined,
           items: state.cart.map((it) => ({
             product_id: it.product_id,
+            variant_id: it.variant_id || undefined,
             quantity: it.quantity,
             special_instructions: it.special_instructions || undefined,
           })),

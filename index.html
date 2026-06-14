@@ -903,6 +903,349 @@
       }
       .modal-content { padding: 22px; }
 
+      /* Tirador del bottom-sheet (afordancia de "deslizá / cerrá") */
+      .sheet-handle {
+        width: 42px;
+        height: 4px;
+        border-radius: 9999px;
+        background: rgba(120, 80, 20, 0.25);
+        margin: 10px auto 2px;
+      }
+
+      /* =================================================================
+         BOTÓN "+" DE AGREGAR EN CADA ITEM DE LA CARTA
+         ─────────────────────────────────────────────────────────────────
+         Afordancia clara de "este plato se puede pedir" sin romper la
+         estética de carta impresa: un círculo dorado fino al costado.
+         ================================================================= */
+      .menu-item-add {
+        flex-shrink: 0;
+        align-self: center;
+        width: 34px;
+        height: 34px;
+        border-radius: 9999px;
+        border: 1px solid var(--gold-dark);
+        color: var(--gold-dark);
+        background: rgba(184, 137, 62, 0.08);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: background-color 150ms, color 150ms, transform 80ms;
+      }
+      .menu-item-add:hover { background: var(--gold); color: #fff; }
+      .menu-item-add:active { transform: scale(0.9); }
+      /* Pequeño pulso cuando se agrega un producto desde el listado */
+      @keyframes addPulse {
+        0% { transform: scale(1); }
+        40% { transform: scale(1.25); background: var(--gold); color: #fff; }
+        100% { transform: scale(1); }
+      }
+      .menu-item-add.pulsing { animation: addPulse 360ms ease; }
+
+      /* Precio "desde" cuando el plato tiene variantes */
+      .menu-item-price .from {
+        font-family: 'Inter', sans-serif;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-muted);
+        margin-right: 4px;
+      }
+
+      /* =================================================================
+         MODAL DE PRODUCTO (editorial — reemplaza las clases Tailwind
+         muertas que quedaron tras sacar el CDN de Tailwind)
+         ================================================================= */
+      .pm-img {
+        width: 100%;
+        height: 200px;
+        object-fit: cover;
+        border-radius: 10px;
+        margin-bottom: 16px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+      }
+      .pm-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      .pm-title {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 30px;
+        font-weight: 600;
+        color: var(--ink-primary);
+        line-height: 1.1;
+        margin: 0;
+        flex: 1;
+      }
+      .pm-close {
+        color: var(--ink-muted);
+        padding: 6px;
+        margin: -6px -6px 0 0;
+        flex-shrink: 0;
+      }
+      .pm-close:hover { color: var(--ink-primary); }
+      .pm-desc {
+        font-family: 'Cormorant Garamond', serif;
+        font-style: italic;
+        font-size: 16px;
+        color: var(--ink-secondary);
+        margin: 8px 0 0;
+        line-height: 1.5;
+      }
+      .pm-price {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 26px;
+        font-weight: 700;
+        color: var(--ink-primary);
+        margin: 14px 0 0;
+        font-variant-numeric: tabular-nums;
+      }
+      .pm-section-label {
+        font-family: 'Inter', sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--ink-muted);
+        margin: 22px 0 10px;
+      }
+
+      /* Variantes — opciones tipo radio elegante */
+      .pm-variants { display: flex; flex-direction: column; gap: 8px; }
+      .pm-variant {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 13px 16px;
+        border: 1px solid rgba(120, 80, 20, 0.28);
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.35);
+        transition: border-color 150ms, background-color 150ms;
+        text-align: left;
+        width: 100%;
+      }
+      .pm-variant.is-selected {
+        border-color: var(--gold-dark);
+        background: rgba(184, 137, 62, 0.14);
+        box-shadow: 0 0 0 1px var(--gold-dark) inset;
+      }
+      .pm-variant-radio {
+        width: 20px;
+        height: 20px;
+        border-radius: 9999px;
+        border: 2px solid rgba(120, 80, 20, 0.35);
+        flex-shrink: 0;
+        position: relative;
+      }
+      .pm-variant.is-selected .pm-variant-radio { border-color: var(--gold-dark); }
+      .pm-variant.is-selected .pm-variant-radio::after {
+        content: '';
+        position: absolute;
+        inset: 3px;
+        border-radius: 9999px;
+        background: var(--gold-dark);
+      }
+      .pm-variant-name {
+        flex: 1;
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--ink-primary);
+      }
+      .pm-variant-price {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 17px;
+        font-weight: 700;
+        color: var(--ink-secondary);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .pm-notes {
+        width: 100%;
+        border: 1px solid rgba(120, 80, 20, 0.3);
+        border-radius: 12px;
+        padding: 11px 13px;
+        font-family: 'Inter', sans-serif;
+        font-size: 14px;
+        resize: none;
+        background: rgba(255, 255, 255, 0.5);
+        color: var(--ink-primary);
+      }
+      .pm-notes:focus { outline: none; border-color: var(--gold-dark); }
+
+      .pm-qty-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 22px;
+      }
+      .pm-qty-label {
+        font-family: 'Inter', sans-serif;
+        font-weight: 600;
+        color: var(--ink-primary);
+      }
+      .pm-qty { display: flex; align-items: center; gap: 14px; }
+      .pm-qty-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 9999px;
+        border: 1px solid var(--gold-dark);
+        color: var(--gold-dark);
+        font-size: 22px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.5);
+        transition: transform 80ms;
+      }
+      .pm-qty-btn:active { transform: scale(0.92); }
+      .pm-qty-val {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 22px;
+        font-weight: 700;
+        min-width: 24px;
+        text-align: center;
+      }
+
+      .pm-add {
+        width: 100%;
+        margin-top: 24px;
+        padding: 16px 22px;
+        border-radius: 14px;
+        background: var(--gold-dark);
+        color: var(--paper-cream);
+        font-family: 'Inter', sans-serif;
+        font-weight: 700;
+        font-size: 15px;
+        letter-spacing: 0.02em;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 6px 18px rgba(80, 50, 15, 0.3);
+      }
+      .pm-add:hover { background: var(--gold); }
+      .pm-add-total { font-variant-numeric: tabular-nums; }
+
+      /* =================================================================
+         MODAL CARRITO (editorial)
+         ================================================================= */
+      .cart-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+      }
+      .cart-title {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 28px;
+        font-weight: 600;
+        color: var(--ink-primary);
+        margin: 0;
+      }
+      .cart-empty {
+        text-align: center;
+        color: var(--ink-muted);
+        font-family: 'Cormorant Garamond', serif;
+        font-style: italic;
+        font-size: 18px;
+        padding: 40px 0;
+      }
+      .cart-row {
+        display: flex;
+        gap: 12px;
+        padding: 14px 0;
+        border-bottom: 1px solid rgba(120, 80, 20, 0.14);
+      }
+      .cart-row-name {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--ink-primary);
+      }
+      .cart-row-sub { font-size: 12.5px; color: var(--ink-muted); margin-top: 2px; }
+      .cart-row-price {
+        font-size: 13px;
+        color: var(--ink-secondary);
+        margin-top: 2px;
+        font-variant-numeric: tabular-nums;
+      }
+      .cart-stepper { display: flex; align-items: center; gap: 10px; }
+      .cart-step-btn {
+        width: 30px;
+        height: 30px;
+        border-radius: 9999px;
+        border: 1px solid var(--gold-dark);
+        color: var(--gold-dark);
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.5);
+        transition: transform 80ms;
+      }
+      .cart-step-btn:active { transform: scale(0.9); }
+      .cart-step-val { font-weight: 700; min-width: 18px; text-align: center; }
+      .cart-total-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 14px 0;
+        margin-top: 6px;
+        border-top: 1px solid var(--gold-dark);
+      }
+      .cart-total-row .l {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 20px;
+        font-weight: 600;
+      }
+      .cart-total-row .v {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--ink-primary);
+        font-variant-numeric: tabular-nums;
+      }
+      .cart-field-label {
+        display: block;
+        font-family: 'Inter', sans-serif;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--ink-secondary);
+        margin: 14px 0 5px;
+      }
+      .cart-input {
+        width: 100%;
+        border: 1px solid rgba(120, 80, 20, 0.3);
+        border-radius: 12px;
+        padding: 12px 14px;
+        font-family: 'Inter', sans-serif;
+        font-size: 15px;
+        background: rgba(255, 255, 255, 0.55);
+        color: var(--ink-primary);
+      }
+      .cart-input:focus { outline: none; border-color: var(--gold-dark); }
+      .cart-submit {
+        width: 100%;
+        margin-top: 18px;
+        padding: 16px;
+        border-radius: 14px;
+        background: var(--gold-dark);
+        color: var(--paper-cream);
+        font-family: 'Inter', sans-serif;
+        font-weight: 700;
+        font-size: 15px;
+        box-shadow: 0 6px 18px rgba(80, 50, 15, 0.3);
+      }
+      .cart-submit:hover { background: var(--gold); }
+      .cart-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+      .cart-error { color: #b03030; font-size: 13px; margin-top: 12px; }
+      .cart-note { font-size: 12px; color: var(--ink-muted); margin-top: 12px; line-height: 1.5; }
+      .req { color: #b03030; }
+
       /* =================================================================
          TRACKING DEL PEDIDO
          ================================================================= */
@@ -982,6 +1325,88 @@
         font-weight: 600;
         font-family: 'Inter', sans-serif;
       }
+
+      /* Variantes del fondo del ícono de estado (reemplazan bg-amber-100
+         etc. de Tailwind, que ya no existen). */
+      .track-icon-amber { background: rgba(212, 167, 106, 0.18); color: var(--gold-light); }
+      .track-icon-brand { background: rgba(184, 137, 62, 0.22); color: var(--gold-light); }
+      .track-icon-green { background: rgba(120, 170, 110, 0.20); color: #9ed29a; }
+      .track-icon-red   { background: rgba(200, 80, 80, 0.18); color: #e88a8a; }
+      .track-icon-muted { background: rgba(244, 232, 207, 0.12); color: #c8b88e; }
+
+      /* Items del pedido en la pantalla de tracking */
+      .track-item {
+        display: flex;
+        justify-content: space-between;
+        font-size: 14px;
+        color: #e9dcc0;
+      }
+      .track-item-q {
+        font-family: 'Cormorant Garamond', serif;
+        font-weight: 700;
+        color: var(--gold-light);
+        margin-right: 4px;
+      }
+      .track-item-note {
+        font-size: 12px;
+        font-style: italic;
+        color: rgba(244, 232, 207, 0.55);
+        padding-left: 18px;
+      }
+
+      /* Timeline de estados */
+      .tl-line {
+        position: absolute;
+        left: 11px;
+        top: 6px;
+        bottom: 6px;
+        width: 2px;
+        background: rgba(244, 232, 207, 0.18);
+      }
+      .tl-row {
+        position: relative;
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding-bottom: 20px;
+      }
+      .tl-row:last-child { padding-bottom: 0; }
+      .tl-dot {
+        position: relative;
+        z-index: 1;
+        width: 24px;
+        height: 24px;
+        border-radius: 9999px;
+        border: 2px solid;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 11px;
+        font-weight: 700;
+        flex-shrink: 0;
+      }
+      .tl-dot.done { background: #7aaa6e; border-color: #7aaa6e; color: #13240f; }
+      .tl-dot.current {
+        background: var(--gold);
+        border-color: var(--gold);
+        color: #1a0e05;
+        animation: tlPulse 1.6s ease-in-out infinite;
+      }
+      .tl-dot.todo {
+        background: transparent;
+        border-color: rgba(244, 232, 207, 0.3);
+        color: rgba(244, 232, 207, 0.4);
+      }
+      @keyframes tlPulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(184, 137, 62, 0.5); }
+        50% { box-shadow: 0 0 0 6px rgba(184, 137, 62, 0); }
+      }
+      .tl-label { font-size: 14px; }
+      .tl-label.done { color: #c8b88e; }
+      .tl-label.current { color: var(--gold-light); font-weight: 700; }
+      .tl-label.todo { color: rgba(244, 232, 207, 0.45); }
+      .tl-sub { font-size: 12px; color: rgba(244, 232, 207, 0.4); }
+      .tl-time { font-size: 11px; color: rgba(244, 232, 207, 0.5); margin-top: 2px; }
 
       /* =================================================================
          RESPONSIVE
@@ -1129,7 +1554,7 @@
       <p class="track-order-no">Pedido <span id="track-order-number"></span></p>
 
       <div style="margin-bottom: 24px;">
-        <div id="track-timeline" style="position: relative; padding-left: 24px;"></div>
+        <div id="track-timeline" style="position: relative;"></div>
       </div>
 
       <div class="track-card">
@@ -1152,6 +1577,6 @@
       Cache-busting: bumpear el `?v=` cada vez que `app.js` cambia para
       forzar a Caddy y al browser a soltar el caché viejo.
     -->
-    <script src="./app.js?v=20260614-5"></script>
+    <script src="./app.js?v=20260614-6"></script>
   </body>
 </html>
