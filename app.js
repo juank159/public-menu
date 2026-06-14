@@ -57,6 +57,10 @@
     // Tracking del pedido enviado.
     trackedOrderNumber: null,
     trackingTimer: null,
+    // Carta en modo libro: índice actual + lock para evitar disparar
+    // doble animación mientras una está corriendo.
+    bookIndex: 0,
+    bookAnimating: false,
   };
 
   // ---------------------------------------------------------------
@@ -206,61 +210,235 @@
     nav.innerHTML = '';
     state.categories.forEach((cat, idx) => {
       const btn = document.createElement('button');
-      const isActive =
-        state.activeCategoryId === cat.id ||
-        (state.activeCategoryId === null && idx === 0);
+      const isActive = idx === state.bookIndex;
       btn.className = `flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold btn-press whitespace-nowrap ${
         isActive
           ? 'bg-brand text-white'
           : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
       }`;
       btn.textContent = cat.name;
-      btn.onclick = () => {
-        state.activeCategoryId = cat.id;
-        renderTabs();
-        // Scroll suave al grupo correspondiente
-        const target = document.getElementById(`cat-${cat.id}`);
-        if (target) {
-          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-      };
+      btn.onclick = () => goToPage(idx);
+      // Scroll horizontal: si la tab activa quedó fuera del viewport
+      // (caso típico al saltar 5 categorías), centrarla suavemente.
+      if (isActive) {
+        requestAnimationFrame(() => {
+          btn.scrollIntoView({
+            behavior: 'smooth',
+            inline: 'center',
+            block: 'nearest',
+          });
+        });
+      }
       nav.appendChild(btn);
     });
   }
 
+  /// ───── Modo LIBRO ──────────────────────────────────────────────
+  /// Cada categoría se renderiza como una "página" absoluta dentro de
+  /// `#book-pages`. Solo la activa se muestra; las demás están con
+  /// `is-hidden`. Al cambiar, animamos un flip 3D con `transform-origin`
+  /// pegado al lomo izquierdo — emula pasar una hoja real.
+
   function renderCategories() {
-    const root = $('categories-content');
+    const root = $('book-pages');
     root.innerHTML = '';
 
     if (state.categories.length === 0) {
-      const msg =
-        state.emptyReason ||
-        'Pedile al mozo más info.';
-      root.innerHTML = `
-        <div class="text-center text-slate-500 py-12">
-          <p class="font-medium">No hay productos disponibles hoy.</p>
-          <p class="text-sm mt-1">${escapeHtml(msg)}</p>
+      const msg = state.emptyReason || 'Pedile al mozo más info.';
+      const empty = document.createElement('div');
+      empty.className = 'book-page is-active';
+      empty.innerHTML = `
+        <div class="book-page-inner">
+          <div class="text-center text-slate-500 py-16">
+            <p class="font-medium">No hay productos disponibles hoy.</p>
+            <p class="text-sm mt-1">${escapeHtml(msg)}</p>
+          </div>
         </div>`;
+      root.appendChild(empty);
+      updateNavButtons();
       return;
     }
 
-    state.categories.forEach((cat) => {
-      const section = document.createElement('section');
-      section.id = `cat-${cat.id}`;
-      section.className = 'scroll-mt-16';
-      section.innerHTML = `
-        <h2 class="text-lg font-bold text-slate-800 mb-3">${escapeHtml(
-          cat.name,
-        )}</h2>
-        <div class="space-y-3" id="prods-${cat.id}"></div>
-      `;
-      root.appendChild(section);
+    // Acotar bookIndex por si las categorías cambiaron y el índice
+    // anterior quedó fuera de rango.
+    if (state.bookIndex >= state.categories.length) state.bookIndex = 0;
+    if (state.bookIndex < 0) state.bookIndex = 0;
 
-      const prodsContainer = section.querySelector(`#prods-${cat.id}`);
-      cat.products.forEach((p) => {
-        prodsContainer.appendChild(buildProductCard(p));
-      });
+    state.categories.forEach((cat, idx) => {
+      const page = buildPage(cat, idx);
+      if (idx === state.bookIndex) {
+        page.classList.add('is-active');
+      } else {
+        page.classList.add('is-hidden');
+      }
+      root.appendChild(page);
     });
+
+    updateNavButtons();
+    bindBookGestures(root);
+  }
+
+  function buildPage(cat, idx) {
+    const page = document.createElement('article');
+    page.className = 'book-page';
+    page.dataset.categoryId = cat.id;
+    page.dataset.idx = String(idx);
+
+    const inner = document.createElement('div');
+    inner.className = 'book-page-inner';
+    inner.innerHTML = `
+      <p class="book-chapter-subtitle">Categoría ${idx + 1}</p>
+      <h2 class="book-chapter-title">${escapeHtml(cat.name)}</h2>
+      <div class="book-chapter-divider"></div>
+      <div class="space-y-3" id="prods-${cat.id}"></div>
+    `;
+    page.appendChild(inner);
+
+    // Número de página (estilo libro físico).
+    const pageno = document.createElement('div');
+    pageno.className = 'book-pageno';
+    pageno.textContent = `${idx + 1} / ${state.categories.length}`;
+    page.appendChild(pageno);
+
+    const prodsContainer = inner.querySelector(`#prods-${cat.id}`);
+    cat.products.forEach((p) => {
+      prodsContainer.appendChild(buildProductCard(p));
+    });
+
+    return page;
+  }
+
+  function updateNavButtons() {
+    const prev = $('book-prev');
+    const next = $('book-next');
+    if (!prev || !next) return;
+    const last = state.categories.length - 1;
+    prev.disabled = state.bookIndex <= 0;
+    next.disabled = state.bookIndex >= last;
+  }
+
+  /// Pasar a la página `targetIdx` con animación. Dirección automática:
+  /// si vamos adelante usamos pageOutForward, si vamos atrás usamos
+  /// pageOutBackward — el efecto es que la hoja siempre se voltea hacia
+  /// el lado correcto.
+  function goToPage(targetIdx) {
+    if (state.bookAnimating) return;
+    if (targetIdx === state.bookIndex) return;
+    if (targetIdx < 0 || targetIdx >= state.categories.length) return;
+
+    const root = $('book-pages');
+    const pages = root.querySelectorAll('.book-page');
+    const current = pages[state.bookIndex];
+    const target = pages[targetIdx];
+    if (!current || !target) return;
+
+    const forward = targetIdx > state.bookIndex;
+    state.bookAnimating = true;
+
+    // Página entrante: arranca visible debajo, sin animación de salida.
+    target.classList.remove('is-hidden');
+    target.classList.remove('is-active');
+    target.classList.add(
+      forward ? 'is-entering-forward' : 'is-entering-backward',
+    );
+
+    // Página saliente: flip.
+    current.classList.remove('is-active');
+    current.classList.add(
+      forward ? 'is-leaving-forward' : 'is-leaving-backward',
+    );
+
+    const onEnd = () => {
+      current.removeEventListener('animationend', onEnd);
+      current.classList.remove(
+        'is-leaving-forward',
+        'is-leaving-backward',
+      );
+      current.classList.add('is-hidden');
+      target.classList.remove(
+        'is-entering-forward',
+        'is-entering-backward',
+      );
+      target.classList.add('is-active');
+      state.bookIndex = targetIdx;
+      state.activeCategoryId = state.categories[targetIdx].id;
+      state.bookAnimating = false;
+      renderTabs(); // refresca la tab activa
+      updateNavButtons();
+      // Llevar el scroll de la nueva página al tope (cada categoría
+      // tiene su propio área de scroll interna).
+      const inner = target.querySelector('.book-page-inner');
+      if (inner) inner.scrollTop = 0;
+    };
+    current.addEventListener('animationend', onEnd);
+  }
+
+  function nextPage() {
+    goToPage(state.bookIndex + 1);
+  }
+  function prevPage() {
+    goToPage(state.bookIndex - 1);
+  }
+
+  /// Swipe horizontal sobre el book-stage para pasar páginas. Tres
+  /// reglas pragmáticas para que el gesto se sienta natural:
+  ///  1. Si el desplazamiento vertical supera al horizontal antes del
+  ///     umbral, NO interpretamos como swipe (es scroll interno).
+  ///  2. Umbral de 60px o 25% del ancho del stage — lo que sea menor.
+  ///  3. Si el dedo se suelta antes del umbral, no pasamos página.
+  let gesturesBound = false;
+  function bindBookGestures(root) {
+    if (gesturesBound) return;
+    gesturesBound = true;
+    let startX = 0;
+    let startY = 0;
+    let active = false;
+    let lockedDirection = null; // 'x' | 'y' | null
+
+    root.addEventListener(
+      'touchstart',
+      (ev) => {
+        if (state.bookAnimating) return;
+        if (ev.touches.length !== 1) return;
+        startX = ev.touches[0].clientX;
+        startY = ev.touches[0].clientY;
+        active = true;
+        lockedDirection = null;
+      },
+      { passive: true },
+    );
+
+    root.addEventListener(
+      'touchmove',
+      (ev) => {
+        if (!active) return;
+        const dx = ev.touches[0].clientX - startX;
+        const dy = ev.touches[0].clientY - startY;
+        if (!lockedDirection) {
+          if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+            lockedDirection = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+          }
+        }
+      },
+      { passive: true },
+    );
+
+    root.addEventListener(
+      'touchend',
+      (ev) => {
+        if (!active) return;
+        active = false;
+        if (lockedDirection !== 'x') return;
+        const dx = ev.changedTouches[0].clientX - startX;
+        const stageW = root.getBoundingClientRect().width || 320;
+        const threshold = Math.min(60, stageW * 0.25);
+        if (Math.abs(dx) < threshold) return;
+        // Swipe a la izquierda = avanzar (siguiente categoría).
+        if (dx < 0) nextPage();
+        else prevPage();
+      },
+      { passive: true },
+    );
   }
 
   function buildProductCard(product) {
@@ -823,6 +1001,11 @@
   // Public API (expuesta para onclick handlers en el HTML)
   // ---------------------------------------------------------------
   const App = {
+    // Navegación de páginas del libro
+    nextPage,
+    prevPage,
+    goToPage,
+
     openProduct(product) {
       renderProductModal(product);
     },
@@ -1054,6 +1237,12 @@
           products: productsByCategory.get(c.id) || [],
         }))
         .filter((c) => c.products.length > 0);
+
+      // Arrancar el "libro" en la primera categoría. Sincronizamos
+      // activeCategoryId por si quedó algo del estado anterior.
+      state.bookIndex = 0;
+      state.activeCategoryId =
+        state.categories.length > 0 ? state.categories[0].id : null;
 
       renderHeader();
       renderTabs();
