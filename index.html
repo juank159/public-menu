@@ -235,44 +235,54 @@
         z-index: 1;
         transform: rotateY(0deg);
         opacity: 1;
-        filter: brightness(0.96);
+        filter: brightness(0.93);
         pointer-events: none;
       }
 
-      /* Salida hacia adelante (próxima categoría):
-         Tres fases que emulan una hoja real:
-           0-12%: lift — la esquina superior se separa del lomo
-                  (translateZ pequeño + rotación inicial)
-           12-55%: caída — la hoja gira pasando por su cara perpendicular
-           55-100%: aterrizaje — la hoja cae plana del otro lado
-         La curve de cada fase es distinta para que el movimiento se
-         sienta orgánico, no robótico. */
+      /* =================================================================
+         FLIP REFINADO — sensación premium
+         ─────────────────────────────────────────────────────────────────
+         Duración: 1450ms (era 950ms). El extra de tiempo es lo que
+         convierte "veloz" en "elegante". 1.4s es el sweet spot —
+         más rápido se siente "ya cambió" sin tiempo a apreciar;
+         más lento se siente lento.
+
+         Curva: cubic-bezier(0.32, 0.72, 0, 1) — la curva "spring"
+         de iOS, arranca con un empujón natural y desacelera
+         progresivamente hasta detenerse. Mucho más suave que la
+         curva anterior (0.42, 0, 0.25, 1) que se notaba "robótica"
+         al pasar por el medio.
+
+         Keyframes: 7 puntos en vez de 4. Más puntos = movimiento más
+         controlado, menos saltos visuales entre fases.
+         ================================================================= */
       .book-page.is-leaving-forward {
-        animation: pageOutForward 950ms cubic-bezier(0.42, 0, 0.25, 1) forwards;
+        animation: pageOutForward 1450ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
         z-index: 3;
         transform-origin: left center;
       }
       .book-page.is-entering-forward {
-        animation: pageInForward 950ms ease-out forwards;
+        animation: pageInForward 1450ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
         z-index: 2;
       }
       .book-page.is-leaving-backward {
-        animation: pageOutBackward 950ms cubic-bezier(0.42, 0, 0.25, 1) forwards;
+        animation: pageOutBackward 1450ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
         z-index: 3;
         transform-origin: right center;
       }
       .book-page.is-entering-backward {
-        animation: pageInBackward 950ms ease-out forwards;
+        animation: pageInBackward 1450ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
         z-index: 2;
       }
       .book-page.is-hidden { display: none; }
 
-      /* OVERLAY de luz/curl — pseudo-elemento que aparece sobre la
-         página solo durante el flip. Es un gradient que recorre la
-         página simulando que la luz se refleja en el papel curvado.
-         La luz se mueve de izquierda a derecha (forward) o derecha
-         a izquierda (backward), enfatizando la sensación de
-         curvatura física. */
+      /* OVERLAY de luz — el reflejo del papel curvado.
+         Versión refinada:
+         - Color blanco-cálido más sutil (.28 en vez de .42)
+         - Fade in/out más extendido (10-90% en vez de 15-85%) para
+           que aparezca y desaparezca casi imperceptible
+         - Plain blend en vez de overlay — más natural sobre papel
+           crema */
       .book-page.is-leaving-forward::after,
       .book-page.is-leaving-backward::after {
         content: '';
@@ -283,102 +293,150 @@
         z-index: 1;
         background: linear-gradient(
           to right,
-          rgba(255, 240, 200, 0) 0%,
-          rgba(255, 240, 200, 0.18) 35%,
-          rgba(255, 255, 230, 0.42) 50%,
-          rgba(0, 0, 0, 0.15) 75%,
-          rgba(0, 0, 0, 0.40) 100%
+          rgba(255, 245, 215, 0) 0%,
+          rgba(255, 245, 215, 0.10) 30%,
+          rgba(255, 250, 230, 0.28) 50%,
+          rgba(60, 35, 15, 0.10) 75%,
+          rgba(20, 10, 5, 0.25) 100%
         );
-        animation: curlSheen 950ms cubic-bezier(0.42, 0, 0.25, 1) forwards;
-        mix-blend-mode: overlay;
+        animation: curlSheen 1450ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+        mix-blend-mode: soft-light;
+        opacity: 0;
       }
       .book-page.is-leaving-backward::after {
-        animation: curlSheenBack 950ms cubic-bezier(0.42, 0, 0.25, 1) forwards;
+        animation: curlSheenBack 1450ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
       }
       @keyframes curlSheen {
-        0%   { opacity: 0; transform: translateX(-20%); }
-        15%  { opacity: 1; }
-        85%  { opacity: 1; }
-        100% { opacity: 0; transform: translateX(20%); }
+        0%   { opacity: 0; transform: translateX(-12%); }
+        10%  { opacity: 0.6; }
+        50%  { opacity: 1; }
+        90%  { opacity: 0.5; }
+        100% { opacity: 0; transform: translateX(12%); }
       }
       @keyframes curlSheenBack {
-        0%   { opacity: 0; transform: translateX(20%); }
-        15%  { opacity: 1; }
-        85%  { opacity: 1; }
-        100% { opacity: 0; transform: translateX(-20%); }
+        0%   { opacity: 0; transform: translateX(12%); }
+        10%  { opacity: 0.6; }
+        50%  { opacity: 1; }
+        90%  { opacity: 0.5; }
+        100% { opacity: 0; transform: translateX(-12%); }
       }
 
+      /* ======= KEYFRAMES DEL FLIP — 7 puntos para movimiento suave =======
+         0%   — Hoja plana sobre el libro
+         8%   — Pre-lift (esquina apenas se mueve, sensación de "voy
+                a pasar la página")
+         24%  — Lift confirmado: la hoja está claramente despegada
+                (translateZ alto + ~28° de inclinación)
+         50%  — Centro perpendicular: el momento "alto" del giro,
+                máximo translateZ
+         76%  — Comenzando a caer del otro lado, translateZ baja
+         92%  — Casi planchada (-170°), ya con sombra de aterrizaje
+         100% — Asentada definitivamente (-180°)
+         ============================================================= */
       @keyframes pageOutForward {
         0% {
-          transform: perspective(1800px) translateZ(0) rotateY(0deg);
+          transform: perspective(2000px) translateZ(0) rotateY(0deg);
           box-shadow:
             inset 8px 0 24px -8px rgba(0, 0, 0, 0.30),
             0 18px 50px rgba(0, 0, 0, 0.55);
         }
-        /* Lift: la hoja se separa del libro y empieza a inclinarse */
-        12% {
-          transform: perspective(1800px) translateZ(20px) rotateY(-12deg);
+        8% {
+          transform: perspective(2000px) translateZ(8px) rotateY(-5deg);
           box-shadow:
-            inset 8px 0 28px -8px rgba(0, 0, 0, 0.45),
-            -8px 28px 40px rgba(0, 0, 0, 0.55);
+            inset 8px 0 26px -8px rgba(0, 0, 0, 0.36),
+            -3px 22px 42px rgba(0, 0, 0, 0.58);
         }
-        /* Mitad del giro — la hoja está casi perpendicular */
+        24% {
+          transform: perspective(2000px) translateZ(38px) rotateY(-28deg);
+          box-shadow:
+            inset 8px 0 32px -8px rgba(0, 0, 0, 0.45),
+            -12px 32px 52px rgba(0, 0, 0, 0.62);
+        }
         50% {
-          transform: perspective(1800px) translateZ(30px) rotateY(-90deg);
+          transform: perspective(2000px) translateZ(48px) rotateY(-90deg);
           box-shadow:
-            inset 0 0 40px rgba(0, 0, 0, 0.55),
-            -18px 30px 60px rgba(0, 0, 0, 0.70);
+            inset 0 0 50px rgba(0, 0, 0, 0.55),
+            -22px 36px 70px rgba(0, 0, 0, 0.72);
         }
-        /* Cae del otro lado, casi planchada — el ángulo final no es
-           exactamente -180 sino -178 para que la sombra del lomo
-           todavía proyecte realista (un -180 exacto colapsaría el
-           plano y desaparecería la sombra). */
-        100% {
-          transform: perspective(1800px) translateZ(0) rotateY(-178deg);
+        76% {
+          transform: perspective(2000px) translateZ(32px) rotateY(-145deg);
           box-shadow:
-            inset 8px 0 30px -8px rgba(0, 0, 0, 0.70),
-            -28px 18px 60px rgba(0, 0, 0, 0.75);
+            inset 6px 0 36px -8px rgba(0, 0, 0, 0.62),
+            -26px 28px 66px rgba(0, 0, 0, 0.72);
+        }
+        92% {
+          transform: perspective(2000px) translateZ(10px) rotateY(-172deg);
+          box-shadow:
+            inset 8px 0 30px -8px rgba(0, 0, 0, 0.65),
+            -28px 22px 60px rgba(0, 0, 0, 0.72);
+        }
+        100% {
+          transform: perspective(2000px) translateZ(0) rotateY(-180deg);
+          box-shadow:
+            inset 8px 0 28px -8px rgba(0, 0, 0, 0.65),
+            -28px 18px 56px rgba(0, 0, 0, 0.70);
         }
       }
       @keyframes pageInForward {
-        /* La página entrante NO se mueve — ya estaba como
-           is-next-preview. Solo subimos su opacidad un toque al final
-           y normalizamos su brillo. Esto da el efecto "hoja queda
-           descansando". */
-        0%   { opacity: 1; filter: brightness(0.92); transform: rotateY(0deg); }
-        50%  { filter: brightness(0.95); }
+        /* La página entrante NO se mueve, solo "respira" en brillo
+           progresivamente para integrarse al final del flip. La curva
+           de brightness es asimétrica: arranca atenuada (0.93),
+           mantiene casi igual durante el flip, sube en la fase
+           final cuando la página de arriba ya cayó. */
+        0%   { opacity: 1; filter: brightness(0.93); transform: rotateY(0deg); }
+        50%  { filter: brightness(0.94); }
+        80%  { filter: brightness(0.97); }
         100% { opacity: 1; filter: brightness(1); transform: rotateY(0deg); }
       }
 
       @keyframes pageOutBackward {
         0% {
-          transform: perspective(1800px) translateZ(0) rotateY(0deg);
+          transform: perspective(2000px) translateZ(0) rotateY(0deg);
           box-shadow:
             inset -8px 0 24px -8px rgba(0, 0, 0, 0.30),
             0 18px 50px rgba(0, 0, 0, 0.55);
         }
-        12% {
-          transform: perspective(1800px) translateZ(20px) rotateY(12deg);
+        8% {
+          transform: perspective(2000px) translateZ(8px) rotateY(5deg);
           box-shadow:
-            inset -8px 0 28px -8px rgba(0, 0, 0, 0.45),
-            8px 28px 40px rgba(0, 0, 0, 0.55);
+            inset -8px 0 26px -8px rgba(0, 0, 0, 0.36),
+            3px 22px 42px rgba(0, 0, 0, 0.58);
+        }
+        24% {
+          transform: perspective(2000px) translateZ(38px) rotateY(28deg);
+          box-shadow:
+            inset -8px 0 32px -8px rgba(0, 0, 0, 0.45),
+            12px 32px 52px rgba(0, 0, 0, 0.62);
         }
         50% {
-          transform: perspective(1800px) translateZ(30px) rotateY(90deg);
+          transform: perspective(2000px) translateZ(48px) rotateY(90deg);
           box-shadow:
-            inset 0 0 40px rgba(0, 0, 0, 0.55),
-            18px 30px 60px rgba(0, 0, 0, 0.70);
+            inset 0 0 50px rgba(0, 0, 0, 0.55),
+            22px 36px 70px rgba(0, 0, 0, 0.72);
+        }
+        76% {
+          transform: perspective(2000px) translateZ(32px) rotateY(145deg);
+          box-shadow:
+            inset -6px 0 36px -8px rgba(0, 0, 0, 0.62),
+            26px 28px 66px rgba(0, 0, 0, 0.72);
+        }
+        92% {
+          transform: perspective(2000px) translateZ(10px) rotateY(172deg);
+          box-shadow:
+            inset -8px 0 30px -8px rgba(0, 0, 0, 0.65),
+            28px 22px 60px rgba(0, 0, 0, 0.72);
         }
         100% {
-          transform: perspective(1800px) translateZ(0) rotateY(178deg);
+          transform: perspective(2000px) translateZ(0) rotateY(180deg);
           box-shadow:
-            inset -8px 0 30px -8px rgba(0, 0, 0, 0.70),
-            28px 18px 60px rgba(0, 0, 0, 0.75);
+            inset -8px 0 28px -8px rgba(0, 0, 0, 0.65),
+            28px 18px 56px rgba(0, 0, 0, 0.70);
         }
       }
       @keyframes pageInBackward {
-        0%   { opacity: 1; filter: brightness(0.92); transform: rotateY(0deg); }
-        50%  { filter: brightness(0.95); }
+        0%   { opacity: 1; filter: brightness(0.93); transform: rotateY(0deg); }
+        50%  { filter: brightness(0.94); }
+        80%  { filter: brightness(0.97); }
         100% { opacity: 1; filter: brightness(1); transform: rotateY(0deg); }
       }
 
@@ -1043,6 +1101,6 @@
       no se actualiza, el browser puede ejecutar JS nuevo con HTML
       viejo (o al revés) y todo revienta con errores tipo null.
     -->
-    <script src="./app.js?v=20260614-3"></script>
+    <script src="./app.js?v=20260614-4"></script>
   </body>
 </html>
