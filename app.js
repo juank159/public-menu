@@ -213,10 +213,8 @@
     state.categories.forEach((cat, idx) => {
       const btn = document.createElement('button');
       const isActive = idx === state.bookIndex;
-      btn.className = `flex-shrink-0 px-4 py-2 rounded-full text-sm font-semibold btn-press whitespace-nowrap ${
-        isActive
-          ? 'bg-brand text-white'
-          : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+      btn.className = `flex-shrink-0 menu-tab btn-press ${
+        isActive ? 'is-active' : ''
       }`;
       btn.textContent = cat.name;
       btn.onclick = () => {
@@ -312,9 +310,9 @@
       empty.className = 'book-page is-active';
       empty.innerHTML = `
         <div class="book-page-inner">
-          <div class="text-center text-slate-500 py-16">
-            <p class="font-medium">No hay productos disponibles hoy.</p>
-            <p class="text-sm mt-1">${escapeHtml(msg)}</p>
+          <div class="menu-empty">
+            <p>La carta aún no fue servida.</p>
+            <p style="font-size: 14px; font-style: italic; opacity: 0.8;">${escapeHtml(msg)}</p>
           </div>
         </div>`;
       root.appendChild(empty);
@@ -341,6 +339,17 @@
     bindBookGestures(root);
   }
 
+  /// Pasa 1, 2, 3... a romanos clásicos (I, II, III...) hasta XX.
+  /// Para una carta de restaurante 20 categorías es más que suficiente
+  /// — si hubiera más cae al arábigo.
+  function toRoman(n) {
+    const romans = [
+      '', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X',
+      'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX',
+    ];
+    return romans[n] || String(n);
+  }
+
   function buildPage(cat, idx) {
     const page = document.createElement('article');
     page.className = 'book-page';
@@ -349,18 +358,33 @@
 
     const inner = document.createElement('div');
     inner.className = 'book-page-inner';
+
+    // Header del capítulo: ornamento ─◆─ + "Capítulo N" en romano +
+    // título de la categoría grande en serifa + flourish manuscrito +
+    // divisor ornamental con motivo central.
     inner.innerHTML = `
-      <p class="book-chapter-subtitle">Categoría ${idx + 1}</p>
-      <h2 class="book-chapter-title">${escapeHtml(cat.name)}</h2>
-      <div class="book-chapter-divider"></div>
-      <div class="space-y-3" id="prods-${cat.id}"></div>
+      <div class="chapter-ornament">
+        <div class="line"></div>
+        <div class="diamond"></div>
+        <div class="line"></div>
+      </div>
+      <p class="chapter-roman">Capítulo ${toRoman(idx + 1)}</p>
+      <h2 class="chapter-title">${escapeHtml(cat.name)}</h2>
+      <div class="chapter-flourish">~ nuestras especialidades ~</div>
+      <div class="chapter-divider">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1" style="color: var(--gold-dark);">
+          <circle cx="7" cy="7" r="2.5" />
+          <path d="M7 1.5v3M7 9.5v3M1.5 7h3M9.5 7h3" />
+        </svg>
+      </div>
+      <div id="prods-${cat.id}"></div>
     `;
     page.appendChild(inner);
 
-    // Número de página (estilo libro físico).
+    // Pie tipo libro: "Página · N de M" (números romanos sutiles).
     const pageno = document.createElement('div');
     pageno.className = 'book-pageno';
-    pageno.textContent = `${idx + 1} / ${state.categories.length}`;
+    pageno.textContent = `~ ${toRoman(idx + 1)} ~`;
     page.appendChild(pageno);
 
     const prodsContainer = inner.querySelector(`#prods-${cat.id}`);
@@ -508,57 +532,46 @@
   }
 
   function buildProductCard(product) {
-    const card = document.createElement('button');
-    card.className =
-      'w-full text-left bg-white rounded-2xl border border-slate-200 hover:border-brand p-4 flex gap-3 btn-press';
+    // Card "menu-item" estilo carta impresa: nombre en serifa, puntos
+    // hasta el precio, descripción en cursiva. Sin border-radius / fondo
+    // — el "paper" es la página del libro, así que cualquier card flota.
+    const card = document.createElement('div');
+    card.className = 'menu-item btn-press';
     card.onclick = () => App.openProduct(product);
 
     const hasImage = !!product.image_url;
     const badgeText = product.badge || product.badge_label;
-    const badge = badgeText
-      ? `<span class="inline-block bg-amber-100 text-amber-800 text-xs font-bold px-2 py-0.5 rounded mb-1.5">${escapeHtml(
-          badgeText,
-        )}</span>`
-      : '';
+    const hasDiscount =
+      product.special_price != null &&
+      product.special_price < product.base_price;
 
-    const priceHtml =
-      product.special_price != null && product.special_price < product.base_price
-        ? `<div class="flex items-baseline gap-2">
-             <span class="text-brand font-bold text-lg">${fmt(
-               product.effective_price ?? product.special_price,
-             )}</span>
-             <span class="text-slate-400 line-through text-sm">${fmt(
-               product.base_price,
-             )}</span>
-           </div>`
-        : `<span class="text-brand font-bold text-lg">${fmt(
-            product.effective_price ?? product.base_price,
-          )}</span>`;
+    const priceHtml = hasDiscount
+      ? `<span class="strike">${fmt(product.base_price)}</span>${fmt(
+          product.effective_price ?? product.special_price,
+        )}`
+      : fmt(product.effective_price ?? product.base_price);
 
     card.innerHTML = `
-      <div class="flex-1 min-w-0">
-        ${badge}
-        <h3 class="font-bold text-slate-900 truncate">${escapeHtml(
-          product.name,
-        )}</h3>
-        ${
-          product.description
-            ? `<p class="text-sm text-slate-500 line-clamp-2 mt-0.5">${escapeHtml(
-                product.description,
-              )}</p>`
-            : ''
-        }
-        <div class="mt-2">${priceHtml}</div>
-      </div>
       ${
         hasImage
-          ? `<div class="w-24 h-24 rounded-xl bg-slate-100 overflow-hidden flex-shrink-0">
-               <img src="${escapeAttr(
-                 product.image_url,
-               )}" alt="" class="w-full h-full object-cover" loading="lazy" />
+          ? `<div class="menu-item-thumb">
+               <img src="${escapeAttr(product.image_url)}" alt="" loading="lazy" />
              </div>`
           : ''
       }
+      <div class="menu-item-body">
+        ${badgeText ? `<span class="menu-item-badge">${escapeHtml(badgeText)}</span>` : ''}
+        <div class="menu-item-line">
+          <span class="menu-item-name">${escapeHtml(product.name)}</span>
+          <span class="menu-item-dots"></span>
+          <span class="menu-item-price">${priceHtml}</span>
+        </div>
+        ${
+          product.description
+            ? `<p class="menu-item-desc">${escapeHtml(product.description)}</p>`
+            : ''
+        }
+      </div>
     `;
     return card;
   }
