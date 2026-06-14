@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1"
     />
-    <meta name="theme-color" content="#0f172a" />
+    <meta name="theme-color" content="#150a05" />
 
     <!--
       Backend API base. Por defecto apunta al backend en producción.
@@ -18,10 +18,13 @@
     <title>Cargando carta…</title>
 
     <!--
-      Tipografías editoriales para sensación de carta impresa de
-      restaurante fino. Cormorant para títulos/precios (serif elegante,
-      alto contraste); Inter para body y UI; Italianno para flourishes
-      manuscritos.
+      Tipografías:
+        - Cormorant Garamond: títulos, nombres de plato, precios (serif
+          editorial de alto contraste, como carta impresa).
+        - Inter: UI y navegación (tabs, botones).
+        - Italianno: flourishes manuscritos.
+      `display=swap` para que el render no se bloquee esperando la
+      fuente; primero pinta con system fallback, después intercambia.
     -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -30,37 +33,82 @@
       rel="stylesheet"
     />
 
-    <!-- Tailwind CDN — cero build step. Suficiente para una app de 1 pantalla. -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              brand: {
-                DEFAULT: '#f97316', // naranja apetecible
-                dark: '#c2410c',
-              },
-            },
-            fontFamily: {
-              sans: [
-                'system-ui',
-                '-apple-system',
-                'BlinkMacSystemFont',
-                'Segoe UI',
-                'Roboto',
-                'sans-serif',
-              ],
-            },
-          },
-        },
-      };
-    </script>
-
     <style>
-      /* Safe area en iPhones con notch / dynamic island */
+      /* =================================================================
+         RESET MINIMAL
+         (reemplaza Tailwind CDN — antes pesaba ~200KB de JS solo para
+         pintar utilities; con esto tenemos lo mismo en ~2KB de CSS y la
+         página pinta de inmediato sin esperar el script.)
+         ================================================================= */
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body {
+        margin: 0;
+        padding: 0;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      body {
+        font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont,
+          'Segoe UI', Roboto, sans-serif;
+        color: #1f1a14;
+        font-size: 15px;
+        line-height: 1.5;
+      }
+      button {
+        font-family: inherit;
+        cursor: pointer;
+        border: none;
+        background: none;
+        color: inherit;
+        padding: 0;
+      }
+      img { display: block; max-width: 100%; }
+
+      /* =================================================================
+         VARIABLES DEL DISEÑO EDITORIAL
+         ================================================================= */
+      :root {
+        /* Papel */
+        --paper-cream: #f4e8cf;
+        --paper-cream-deep: #e9d9b3;
+        --paper-cream-darker: #d4be8c;
+
+        /* Tinta */
+        --ink-primary: #2a1a08;
+        --ink-secondary: #5a3f1a;
+        --ink-muted: #8a6a3a;
+        --ink-faint: rgba(120, 80, 20, 0.45);
+
+        /* Oro */
+        --gold: #b8893e;
+        --gold-light: #d4a76a;
+        --gold-dark: #8d6420;
+
+        /* Cuero / fondo */
+        --leather: #1f120a;
+        --leather-dark: #0e0805;
+
+        /* Brand */
+        --brand: #b8893e;
+        --brand-dark: #8d6420;
+
+        /* Timings */
+        --flip-duration: 1200ms;
+        --flip-curve: cubic-bezier(0.32, 0.72, 0, 1);
+      }
+
+      /* =================================================================
+         UTILIDADES MINIMAS (lo que usábamos de Tailwind)
+         ================================================================= */
+      .hidden { display: none !important; }
       .safe-top { padding-top: max(env(safe-area-inset-top), 0.5rem); }
       .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 0.5rem); }
+
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+      .btn-press { transition: transform 80ms ease, background-color 120ms ease; }
+      .btn-press:active { transform: scale(0.97); }
 
       /* Skeleton shimmer mientras carga el menú */
       @keyframes shimmer {
@@ -70,53 +118,18 @@
       .shimmer {
         background: linear-gradient(
           90deg,
-          #f1f5f9 0%,
-          #e2e8f0 50%,
-          #f1f5f9 100%
+          #2a1a0e 0%,
+          #3a261a 50%,
+          #2a1a0e 100%
         );
         background-size: 200% 100%;
         animation: shimmer 1.4s ease-in-out infinite;
+        border-radius: 6px;
       }
-
-      /* Sticky categorías con backdrop-blur (efecto premium tipo Toast/Square) */
-      .sticky-tabs {
-        backdrop-filter: saturate(180%) blur(12px);
-        -webkit-backdrop-filter: saturate(180%) blur(12px);
-      }
-
-      /* Botón principal con leve press feedback */
-      .btn-press {
-        transition: transform 80ms ease, background-color 120ms ease;
-      }
-      .btn-press:active { transform: scale(0.97); }
-
-      /* Scroll horizontal sin scrollbar en categorías */
-      .no-scrollbar::-webkit-scrollbar { display: none; }
-      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
       /* =================================================================
-         CARTA EN MODO LIBRO — versión editorial premium
-         ─────────────────────────────────────────────────────────────────
-         Objetivo: que cuando el cliente escanee el QR se sienta como si
-         le entregaran una carta impresa de restaurante fino, no una
-         web. Tipografía editorial, papel envejecido, ornamentos, flip
-         cinematográfico con sombras que se mueven.
+         FONDO Y LAYOUT GENERAL
          ================================================================= */
-
-      :root {
-        --paper-cream: #f4e8cf;
-        --paper-cream-deep: #e9d9b3;
-        --paper-shadow: rgba(60, 35, 10, 0.18);
-        --ink-primary: #2a1a08;
-        --ink-secondary: #5a3f1a;
-        --ink-muted: #8a6a3a;
-        --gold: #b8893e;
-        --gold-dark: #8d6420;
-        --leather: #1f120a;
-        --leather-dark: #0e0805;
-      }
-
-      /* Fondo: mesa oscura de madera/cuero para que el libro destaque. */
       body.book-mode {
         background:
           radial-gradient(
@@ -126,9 +139,136 @@
             #0a0503 100%
           );
         background-attachment: fixed;
+        min-height: 100vh;
       }
 
-      /* Stage = el libro flotando. Ocupa casi toda la pantalla. */
+      /* Pantallas */
+      .screen-loading,
+      .screen-error,
+      .screen-menu,
+      .screen-tracking { min-height: 100vh; }
+
+      .screen-loading { padding: 24px 16px; }
+
+      /* =================================================================
+         PANTALLA DE ERROR
+         ================================================================= */
+      .screen-error {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 24px;
+        color: #f4e8cf;
+      }
+      .screen-error.hidden { display: none !important; }
+      .error-icon {
+        width: 80px;
+        height: 80px;
+        border-radius: 9999px;
+        background: rgba(220, 60, 60, 0.16);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 20px;
+        color: #ef5350;
+      }
+      .error-title {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 26px;
+        font-weight: 600;
+        margin: 0 0 8px;
+      }
+      .error-msg {
+        color: #c8b88e;
+        max-width: 320px;
+        margin: 0 0 24px;
+      }
+      .error-retry {
+        padding: 12px 28px;
+        background: var(--gold);
+        color: #1a0e05;
+        border-radius: 9999px;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+      }
+
+      /* =================================================================
+         HEADER DEL RESTAURANTE
+         ================================================================= */
+      .menu-header {
+        background: linear-gradient(
+          to bottom,
+          rgba(15, 8, 3, 0.95),
+          rgba(15, 8, 3, 0.85)
+        );
+        color: #f4e8cf;
+        border-bottom: 1px solid rgba(184, 137, 62, 0.3);
+        padding: 16px 20px;
+        text-align: center;
+      }
+      .menu-header-tenant {
+        font-family: 'Inter', sans-serif;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: var(--gold);
+        margin: 0;
+      }
+      .menu-header-title {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 22px;
+        font-weight: 600;
+        color: #f4e8cf;
+        letter-spacing: 0.02em;
+        margin: 4px 0 0;
+      }
+
+      /* =================================================================
+         TABS DE CATEGORÍAS (sans-serif, UI clara)
+         ================================================================= */
+      .menu-tabs-wrap {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: rgba(15, 8, 3, 0.92);
+        border-bottom: 1px solid rgba(184, 137, 62, 0.22);
+        padding: 12px 16px;
+        display: flex;
+        gap: 8px;
+        overflow-x: auto;
+      }
+      .menu-tab {
+        flex-shrink: 0;
+        font-family: 'Inter', sans-serif;
+        font-size: 13px;
+        font-weight: 500;
+        color: #c8b88e;
+        padding: 7px 14px;
+        border-radius: 999px;
+        white-space: nowrap;
+        letter-spacing: 0.02em;
+        border: 1px solid transparent;
+        transition: background-color 200ms, color 200ms, transform 80ms;
+      }
+      .menu-tab:hover { color: #f0deab; }
+      .menu-tab:active { transform: scale(0.96); }
+      .menu-tab.is-active {
+        color: #1a0e05;
+        background: var(--gold-light);
+        border-color: rgba(255, 255, 255, 0.25);
+        font-weight: 600;
+      }
+
+      /* =================================================================
+         LIBRO — STAGE Y CONTENEDOR
+         ================================================================= */
+      .book-wrap {
+        position: relative;
+        padding: 20px 0 24px;
+      }
       .book-stage {
         position: relative;
         width: min(100%, 720px);
@@ -136,12 +276,6 @@
         perspective: 2200px;
         perspective-origin: 50% 40%;
       }
-
-      /* Contenedor de páginas: relativo con altura fija porque las
-         páginas hijas se posicionan absolutamente sobre el mismo
-         plano (necesario para que la "preview" de la siguiente quede
-         debajo de la actual durante el flip — sin esto las páginas
-         se apilarían verticalmente). */
       #book-pages {
         position: relative;
         height: calc(100vh - 200px);
@@ -149,37 +283,36 @@
         transform-style: preserve-3d;
       }
 
-      /* Cada página es una "hoja" del libro. La textura de papel viene
-         de capas superpuestas: gradiente crema base + manchas radiales
-         tenues + vignette de bordes oscurecidos. Posición absoluta para
-         que TODAS las páginas ocupen el mismo plano — durante el flip
-         podemos ver dos páginas a la vez (la que se levanta y la que
-         queda debajo). */
+      /* =================================================================
+         PÁGINA — TEXTURA Y SOMBRA BASE (estáticas, GPU-friendly)
+         ─────────────────────────────────────────────────────────────────
+         Las sombras NO se animan en keyframes (era costoso). En su lugar
+         tenemos dos pseudo-elementos:
+           - ::before = sombra de descanso (la página posada en el libro)
+           - .book-page-shadow = sombra de proyección durante el flip
+             (animamos opacity y transform, ambos GPU)
+         ================================================================= */
       .book-page {
         position: absolute;
         inset: 0;
         background-color: var(--paper-cream);
         background-image:
-          /* mancha cálida superior izquierda */
           radial-gradient(
             ellipse 60% 40% at 18% 10%,
             rgba(180, 130, 60, 0.10) 0%,
             transparent 60%
           ),
-          /* mancha cálida inferior derecha */
           radial-gradient(
             ellipse 50% 35% at 85% 88%,
             rgba(140, 90, 30, 0.08) 0%,
             transparent 60%
           ),
-          /* vignette de bordes */
           radial-gradient(
             ellipse at center,
             transparent 55%,
             rgba(80, 50, 15, 0.10) 90%,
             rgba(80, 50, 15, 0.18) 100%
           ),
-          /* gradiente sutil hacia el lomo */
           linear-gradient(
             to right,
             rgba(0, 0, 0, 0.12) 0%,
@@ -188,20 +321,20 @@
             rgba(0, 0, 0, 0.05) 100%
           );
         border-radius: 3px 12px 12px 3px;
+        /* Sombra base estática — no se anima, evita el lag del blur
+           recalculado por frame. */
         box-shadow:
-          /* sombra interna izquierda (la "doblez" del lomo) */
           inset 8px 0 24px -8px rgba(0, 0, 0, 0.30),
-          /* sombra de relieve derecha (bordes desgastados) */
-          inset -2px 0 6px rgba(120, 80, 30, 0.10),
-          /* sombra global profunda contra el fondo oscuro */
           0 18px 50px rgba(0, 0, 0, 0.55),
           0 6px 16px rgba(0, 0, 0, 0.35);
         transform-origin: left center;
         transform-style: preserve-3d;
-        will-change: transform, box-shadow;
+        /* Solo declaramos will-change para transform y opacity —
+           ambos van por GPU. Box-shadow NO. */
+        will-change: transform, opacity;
       }
 
-      /* Línea ornamental simulando los puntos de costura del lomo. */
+      /* Línea de costura del lomo, decorativa */
       .book-page::before {
         content: '';
         position: absolute;
@@ -220,16 +353,13 @@
         pointer-events: none;
       }
 
-      /* Página visible — base. */
       .book-page.is-active {
         transform: rotateY(0deg);
         z-index: 2;
       }
 
-      /* La página siguiente queda visible DEBAJO desde el inicio del
-         flip, con z-index 1 y leve atenuación. Esto es lo que hace que
-         se vea como un libro real: ves la hoja debajo cuando levantas
-         la de arriba. Sin esto el flip se siente "vacío". */
+      /* Página de DEBAJO durante el flip — vista parcial, igual que en
+         un libro real cuando levantás la hoja. */
       .book-page.is-next-preview {
         display: block;
         z-index: 1;
@@ -238,215 +368,101 @@
         filter: brightness(0.93);
         pointer-events: none;
       }
-
-      /* =================================================================
-         FLIP REFINADO — sensación premium
-         ─────────────────────────────────────────────────────────────────
-         Duración: 1450ms (era 950ms). El extra de tiempo es lo que
-         convierte "veloz" en "elegante". 1.4s es el sweet spot —
-         más rápido se siente "ya cambió" sin tiempo a apreciar;
-         más lento se siente lento.
-
-         Curva: cubic-bezier(0.32, 0.72, 0, 1) — la curva "spring"
-         de iOS, arranca con un empujón natural y desacelera
-         progresivamente hasta detenerse. Mucho más suave que la
-         curva anterior (0.42, 0, 0.25, 1) que se notaba "robótica"
-         al pasar por el medio.
-
-         Keyframes: 7 puntos en vez de 4. Más puntos = movimiento más
-         controlado, menos saltos visuales entre fases.
-         ================================================================= */
-      .book-page.is-leaving-forward {
-        animation: pageOutForward 1450ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
-        z-index: 3;
-        transform-origin: left center;
-      }
-      .book-page.is-entering-forward {
-        animation: pageInForward 1450ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
-        z-index: 2;
-      }
-      .book-page.is-leaving-backward {
-        animation: pageOutBackward 1450ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
-        z-index: 3;
-        transform-origin: right center;
-      }
-      .book-page.is-entering-backward {
-        animation: pageInBackward 1450ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
-        z-index: 2;
-      }
       .book-page.is-hidden { display: none; }
 
-      /* OVERLAY de luz — el reflejo del papel curvado.
-         Versión refinada:
-         - Color blanco-cálido más sutil (.28 en vez de .42)
-         - Fade in/out más extendido (10-90% en vez de 15-85%) para
-           que aparezca y desaparezca casi imperceptible
-         - Plain blend en vez de overlay — más natural sobre papel
-           crema */
-      .book-page.is-leaving-forward::after,
-      .book-page.is-leaving-backward::after {
-        content: '';
+      /* =================================================================
+         FLIP — sólo animamos transform + opacity (todo GPU)
+         ─────────────────────────────────────────────────────────────────
+         FORWARD (siguiente categoría):
+           La página actual se voltea desde el lomo izquierdo (-180°).
+
+         BACKWARD (categoría anterior):
+           La página actual queda como preview debajo.
+           La página anterior viene desde -180° volteándose hacia 0°,
+           ENTRANDO sobre la actual. Mismo lomo izquierdo siempre — eso
+           es lo correcto en un libro de página única.
+
+         Animación con 7 keyframes para suavidad, sin box-shadow para
+         que no caigan frames.
+         ================================================================= */
+      .book-page.is-leaving-forward {
+        animation: pageFlipOutLeft var(--flip-duration) var(--flip-curve) forwards;
+        z-index: 3;
+      }
+      .book-page.is-entering-backward-flip {
+        animation: pageFlipInLeft var(--flip-duration) var(--flip-curve) forwards;
+        z-index: 3;
+      }
+
+      @keyframes pageFlipOutLeft {
+        0%   { transform: translateZ(0)   rotateY(0deg); }
+        8%   { transform: translateZ(8px) rotateY(-5deg); }
+        24%  { transform: translateZ(38px) rotateY(-28deg); }
+        50%  { transform: translateZ(48px) rotateY(-90deg); }
+        76%  { transform: translateZ(32px) rotateY(-145deg); }
+        92%  { transform: translateZ(10px) rotateY(-172deg); }
+        100% { transform: translateZ(0)    rotateY(-180deg); }
+      }
+      @keyframes pageFlipInLeft {
+        0%   { transform: translateZ(0)    rotateY(-180deg); }
+        8%   { transform: translateZ(10px) rotateY(-172deg); }
+        24%  { transform: translateZ(32px) rotateY(-145deg); }
+        50%  { transform: translateZ(48px) rotateY(-90deg); }
+        76%  { transform: translateZ(38px) rotateY(-28deg); }
+        92%  { transform: translateZ(8px)  rotateY(-5deg); }
+        100% { transform: translateZ(0)    rotateY(0deg); }
+      }
+
+      /* =================================================================
+         SOMBRA DE PROYECCIÓN (separada de la página, solo opacity/transf)
+         Un div hijo `.book-page-shadow` que vive bajo la página y que
+         durante el flip se anima escalando + desplazando + opacity. NO
+         tiene box-shadow animado — los blurs son fijos, solo se mueve.
+         ================================================================= */
+      .book-page-shadow {
         position: absolute;
-        inset: 0;
-        border-radius: inherit;
-        pointer-events: none;
-        z-index: 1;
-        background: linear-gradient(
-          to right,
-          rgba(255, 245, 215, 0) 0%,
-          rgba(255, 245, 215, 0.10) 30%,
-          rgba(255, 250, 230, 0.28) 50%,
-          rgba(60, 35, 15, 0.10) 75%,
-          rgba(20, 10, 5, 0.25) 100%
+        left: 0;
+        right: 0;
+        bottom: -10px;
+        height: 30px;
+        background: radial-gradient(
+          ellipse at center,
+          rgba(0, 0, 0, 0.50) 0%,
+          rgba(0, 0, 0, 0.18) 45%,
+          transparent 70%
         );
-        animation: curlSheen 1450ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
-        mix-blend-mode: soft-light;
         opacity: 0;
+        transform: translateX(0) scaleX(1);
+        transform-origin: left center;
+        pointer-events: none;
+        will-change: opacity, transform;
       }
-      .book-page.is-leaving-backward::after {
-        animation: curlSheenBack 1450ms cubic-bezier(0.32, 0.72, 0, 1) forwards;
+      .book-page.is-leaving-forward .book-page-shadow {
+        animation: shadowFollow var(--flip-duration) var(--flip-curve) forwards;
       }
-      @keyframes curlSheen {
-        0%   { opacity: 0; transform: translateX(-12%); }
-        10%  { opacity: 0.6; }
-        50%  { opacity: 1; }
-        90%  { opacity: 0.5; }
-        100% { opacity: 0; transform: translateX(12%); }
+      .book-page.is-entering-backward-flip .book-page-shadow {
+        animation: shadowFollowReverse var(--flip-duration) var(--flip-curve) forwards;
       }
-      @keyframes curlSheenBack {
-        0%   { opacity: 0; transform: translateX(12%); }
-        10%  { opacity: 0.6; }
-        50%  { opacity: 1; }
-        90%  { opacity: 0.5; }
-        100% { opacity: 0; transform: translateX(-12%); }
+      @keyframes shadowFollow {
+        0%   { opacity: 0; transform: translateX(0) scaleX(1); }
+        24%  { opacity: 0.55; transform: translateX(-20px) scaleX(0.9); }
+        50%  { opacity: 0.75; transform: translateX(-40px) scaleX(0.6); }
+        76%  { opacity: 0.45; transform: translateX(-60px) scaleX(0.5); }
+        100% { opacity: 0; transform: translateX(-80px) scaleX(0.4); }
       }
-
-      /* ======= KEYFRAMES DEL FLIP — 7 puntos para movimiento suave =======
-         0%   — Hoja plana sobre el libro
-         8%   — Pre-lift (esquina apenas se mueve, sensación de "voy
-                a pasar la página")
-         24%  — Lift confirmado: la hoja está claramente despegada
-                (translateZ alto + ~28° de inclinación)
-         50%  — Centro perpendicular: el momento "alto" del giro,
-                máximo translateZ
-         76%  — Comenzando a caer del otro lado, translateZ baja
-         92%  — Casi planchada (-170°), ya con sombra de aterrizaje
-         100% — Asentada definitivamente (-180°)
-         ============================================================= */
-      @keyframes pageOutForward {
-        0% {
-          transform: perspective(2000px) translateZ(0) rotateY(0deg);
-          box-shadow:
-            inset 8px 0 24px -8px rgba(0, 0, 0, 0.30),
-            0 18px 50px rgba(0, 0, 0, 0.55);
-        }
-        8% {
-          transform: perspective(2000px) translateZ(8px) rotateY(-5deg);
-          box-shadow:
-            inset 8px 0 26px -8px rgba(0, 0, 0, 0.36),
-            -3px 22px 42px rgba(0, 0, 0, 0.58);
-        }
-        24% {
-          transform: perspective(2000px) translateZ(38px) rotateY(-28deg);
-          box-shadow:
-            inset 8px 0 32px -8px rgba(0, 0, 0, 0.45),
-            -12px 32px 52px rgba(0, 0, 0, 0.62);
-        }
-        50% {
-          transform: perspective(2000px) translateZ(48px) rotateY(-90deg);
-          box-shadow:
-            inset 0 0 50px rgba(0, 0, 0, 0.55),
-            -22px 36px 70px rgba(0, 0, 0, 0.72);
-        }
-        76% {
-          transform: perspective(2000px) translateZ(32px) rotateY(-145deg);
-          box-shadow:
-            inset 6px 0 36px -8px rgba(0, 0, 0, 0.62),
-            -26px 28px 66px rgba(0, 0, 0, 0.72);
-        }
-        92% {
-          transform: perspective(2000px) translateZ(10px) rotateY(-172deg);
-          box-shadow:
-            inset 8px 0 30px -8px rgba(0, 0, 0, 0.65),
-            -28px 22px 60px rgba(0, 0, 0, 0.72);
-        }
-        100% {
-          transform: perspective(2000px) translateZ(0) rotateY(-180deg);
-          box-shadow:
-            inset 8px 0 28px -8px rgba(0, 0, 0, 0.65),
-            -28px 18px 56px rgba(0, 0, 0, 0.70);
-        }
-      }
-      @keyframes pageInForward {
-        /* La página entrante NO se mueve, solo "respira" en brillo
-           progresivamente para integrarse al final del flip. La curva
-           de brightness es asimétrica: arranca atenuada (0.93),
-           mantiene casi igual durante el flip, sube en la fase
-           final cuando la página de arriba ya cayó. */
-        0%   { opacity: 1; filter: brightness(0.93); transform: rotateY(0deg); }
-        50%  { filter: brightness(0.94); }
-        80%  { filter: brightness(0.97); }
-        100% { opacity: 1; filter: brightness(1); transform: rotateY(0deg); }
+      @keyframes shadowFollowReverse {
+        0%   { opacity: 0; transform: translateX(-80px) scaleX(0.4); }
+        24%  { opacity: 0.45; transform: translateX(-60px) scaleX(0.5); }
+        50%  { opacity: 0.75; transform: translateX(-40px) scaleX(0.6); }
+        76%  { opacity: 0.55; transform: translateX(-20px) scaleX(0.9); }
+        100% { opacity: 0; transform: translateX(0) scaleX(1); }
       }
 
-      @keyframes pageOutBackward {
-        0% {
-          transform: perspective(2000px) translateZ(0) rotateY(0deg);
-          box-shadow:
-            inset -8px 0 24px -8px rgba(0, 0, 0, 0.30),
-            0 18px 50px rgba(0, 0, 0, 0.55);
-        }
-        8% {
-          transform: perspective(2000px) translateZ(8px) rotateY(5deg);
-          box-shadow:
-            inset -8px 0 26px -8px rgba(0, 0, 0, 0.36),
-            3px 22px 42px rgba(0, 0, 0, 0.58);
-        }
-        24% {
-          transform: perspective(2000px) translateZ(38px) rotateY(28deg);
-          box-shadow:
-            inset -8px 0 32px -8px rgba(0, 0, 0, 0.45),
-            12px 32px 52px rgba(0, 0, 0, 0.62);
-        }
-        50% {
-          transform: perspective(2000px) translateZ(48px) rotateY(90deg);
-          box-shadow:
-            inset 0 0 50px rgba(0, 0, 0, 0.55),
-            22px 36px 70px rgba(0, 0, 0, 0.72);
-        }
-        76% {
-          transform: perspective(2000px) translateZ(32px) rotateY(145deg);
-          box-shadow:
-            inset -6px 0 36px -8px rgba(0, 0, 0, 0.62),
-            26px 28px 66px rgba(0, 0, 0, 0.72);
-        }
-        92% {
-          transform: perspective(2000px) translateZ(10px) rotateY(172deg);
-          box-shadow:
-            inset -8px 0 30px -8px rgba(0, 0, 0, 0.65),
-            28px 22px 60px rgba(0, 0, 0, 0.72);
-        }
-        100% {
-          transform: perspective(2000px) translateZ(0) rotateY(180deg);
-          box-shadow:
-            inset -8px 0 28px -8px rgba(0, 0, 0, 0.65),
-            28px 18px 56px rgba(0, 0, 0, 0.70);
-        }
-      }
-      @keyframes pageInBackward {
-        0%   { opacity: 1; filter: brightness(0.93); transform: rotateY(0deg); }
-        50%  { filter: brightness(0.94); }
-        80%  { filter: brightness(0.97); }
-        100% { opacity: 1; filter: brightness(1); transform: rotateY(0deg); }
-      }
-
-      /* BACKFACE de la hoja — un div hijo posicionado con rotateY(180)
-         para que se vea ÚNICAMENTE cuando la página rota más allá de
-         90° (en ese momento la cara frontal apunta hacia atrás y el
-         backface-visibility la oculta; la back, que estaba apuntando
-         hacia atrás al inicio, ahora apunta hacia el espectador).
-         Sin esta backface, durante el giro se ve un "agujero" o se
-         pasa de la cara frontal a vacío. */
+      /* =================================================================
+         BACKFACE — el reverso del papel
+         Visible cuando la página rota más de 90°. Sin esto se ve un
+         "agujero" durante el flip.
+         ================================================================= */
       .book-page-back {
         position: absolute;
         inset: 0;
@@ -474,28 +490,31 @@
         backface-visibility: hidden;
         pointer-events: none;
       }
-
-      /* La página necesita preserve-3d para que el backface se posicione
-         correctamente en 3D y backface-visibility en su cara frontal
-         para que se oculte cuando rota más allá de 90°. */
       .book-page-inner {
+        position: relative;
+        padding: 42px 32px 56px 36px;
+        height: 100%;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
         backface-visibility: hidden;
       }
 
-      /* Lomo y bookmark del libro. */
+      /* =================================================================
+         LOMO Y BOOKMARK
+         ================================================================= */
       .book-spine {
         position: absolute;
         left: -6px;
         top: 8px;
         bottom: 8px;
         width: 14px;
-        background:
-          linear-gradient(
-            to right,
-            var(--leather-dark) 0%,
-            #2a160a 50%,
-            var(--leather-dark) 100%
-          );
+        background: linear-gradient(
+          to right,
+          var(--leather-dark) 0%,
+          #2a160a 50%,
+          var(--leather-dark) 100%
+        );
         border-radius: 3px 0 0 3px;
         box-shadow:
           inset 0 1px 3px rgba(255, 255, 255, 0.05),
@@ -518,46 +537,57 @@
         opacity: 0.4;
       }
 
-      /* Cinta marcador dorada que cuelga del lomo. */
+      /* Bookmark — más sutil, solo del lado derecho con cinta dorada
+         más fina que cuelga ligeramente. */
       .book-bookmark {
         position: absolute;
-        top: 0;
-        right: 36px;
-        width: 22px;
-        height: 90px;
+        top: -1px;
+        right: 48px;
+        width: 14px;
+        height: 60px;
         background: linear-gradient(
           to bottom,
-          var(--gold) 0%,
+          var(--gold-light) 0%,
           var(--gold-dark) 100%
         );
-        clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
-        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
         z-index: 5;
         pointer-events: none;
       }
 
-      /* Contenido scrollable dentro de la página. */
-      .book-page-inner {
-        padding: 38px 32px 56px 36px;
-        height: 100%;
-        overflow-y: auto;
-        overscroll-behavior: contain;
-        -webkit-overflow-scrolling: touch;
+      /* =================================================================
+         PIE Y NÚMERO DE PÁGINA
+         ================================================================= */
+      .book-pageno {
+        position: absolute;
+        bottom: 18px;
+        left: 0;
+        right: 0;
+        text-align: center;
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 13px;
+        color: var(--ink-muted);
+        letter-spacing: 0.2em;
+        pointer-events: none;
+        opacity: 0.7;
       }
 
-      /* Encabezado del capítulo: ornamento + número + título manuscrito. */
+      /* =================================================================
+         CAPÍTULO HEADER (ahora más sobrio: sólo ornamento + título)
+         ================================================================= */
       .chapter-ornament {
         display: flex;
         align-items: center;
         justify-content: center;
         gap: 10px;
         color: var(--gold-dark);
-        margin-bottom: 8px;
+        margin-bottom: 10px;
       }
       .chapter-ornament .line {
         height: 1px;
         flex: 1;
-        max-width: 60px;
+        max-width: 70px;
         background: linear-gradient(
           to right,
           transparent,
@@ -571,16 +601,6 @@
         transform: rotate(45deg);
         background: var(--gold-dark);
       }
-      .chapter-roman {
-        font-family: 'Cormorant Garamond', serif;
-        font-size: 13px;
-        font-weight: 500;
-        letter-spacing: 0.4em;
-        text-align: center;
-        color: var(--ink-muted);
-        text-transform: uppercase;
-        margin-bottom: 2px;
-      }
       .chapter-title {
         font-family: 'Cormorant Garamond', serif;
         font-size: 38px;
@@ -588,21 +608,13 @@
         text-align: center;
         color: var(--ink-primary);
         line-height: 1.05;
-        margin: 0;
+        margin: 0 0 6px;
         letter-spacing: -0.01em;
-      }
-      .chapter-flourish {
-        font-family: 'Italianno', cursive;
-        font-size: 22px;
-        text-align: center;
-        color: var(--gold-dark);
-        margin: 4px 0 18px;
-        line-height: 1;
       }
       .chapter-divider {
         position: relative;
         text-align: center;
-        margin: 16px auto 28px;
+        margin: 14px auto 26px;
         max-width: 200px;
       }
       .chapter-divider::before,
@@ -614,30 +626,100 @@
         background: var(--gold-dark);
         vertical-align: middle;
         margin: 0 8px;
-        opacity: 0.6;
+        opacity: 0.55;
       }
       .chapter-divider svg {
         vertical-align: middle;
         opacity: 0.7;
       }
 
-      /* ─── Cards de producto estilo carta clásica ─────────────────── */
+      /* =================================================================
+         PORTADA (página índice 0)
+         ================================================================= */
+      .cover {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        height: 100%;
+        padding: 40px 30px;
+      }
+      .cover-ornament-top,
+      .cover-ornament-bottom {
+        color: var(--gold-dark);
+        opacity: 0.6;
+        margin-bottom: 28px;
+      }
+      .cover-ornament-bottom { margin: 28px 0 0; }
+      .cover-pretitle {
+        font-family: 'Italianno', cursive;
+        font-size: 32px;
+        color: var(--gold-dark);
+        margin: 0 0 8px;
+        line-height: 1;
+      }
+      .cover-title {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 54px;
+        font-weight: 600;
+        color: var(--ink-primary);
+        margin: 0;
+        letter-spacing: -0.02em;
+        line-height: 0.95;
+      }
+      .cover-rule {
+        width: 70px;
+        height: 1px;
+        background: var(--gold-dark);
+        margin: 24px auto;
+        opacity: 0.55;
+      }
+      .cover-tenant {
+        font-family: 'Inter', sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.35em;
+        text-transform: uppercase;
+        color: var(--ink-muted);
+        margin: 0 0 6px;
+      }
+      .cover-destination {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 18px;
+        font-style: italic;
+        color: var(--ink-secondary);
+        margin: 0;
+      }
+      .cover-hint {
+        position: absolute;
+        bottom: 28px;
+        left: 0;
+        right: 0;
+        text-align: center;
+        font-family: 'Inter', sans-serif;
+        font-size: 11px;
+        letter-spacing: 0.25em;
+        color: var(--ink-muted);
+        text-transform: uppercase;
+        opacity: 0.6;
+      }
+
+      /* =================================================================
+         CARDS DE PRODUCTO (listado estilo carta clásica)
+         ================================================================= */
       .menu-item {
         position: relative;
         padding: 18px 0;
         display: flex;
         gap: 16px;
         cursor: pointer;
-        transition: background-color 200ms;
         align-items: flex-start;
       }
       .menu-item + .menu-item {
-        border-top: 1px solid rgba(120, 80, 20, 0.18);
+        border-top: 1px solid rgba(120, 80, 20, 0.16);
       }
-      .menu-item:active {
-        background-color: rgba(184, 137, 62, 0.06);
-      }
-
+      .menu-item:active { background-color: rgba(184, 137, 62, 0.06); }
       .menu-item-thumb {
         width: 64px;
         height: 64px;
@@ -652,11 +734,7 @@
         height: 100%;
         object-fit: cover;
       }
-
       .menu-item-body { flex: 1; min-width: 0; }
-
-      /* Línea principal: nombre + puntos + precio. Es el efecto
-         clásico de carta impresa (nombre....precio). */
       .menu-item-line {
         display: flex;
         align-items: baseline;
@@ -672,11 +750,12 @@
         overflow: hidden;
         text-overflow: ellipsis;
       }
+      /* Puntos más finos, menos contraste — más editorial */
       .menu-item-dots {
         flex: 1;
-        border-bottom: 1px dotted rgba(120, 80, 20, 0.45);
-        margin: 0 4px;
-        transform: translateY(-4px);
+        border-bottom: 1px dotted rgba(120, 80, 20, 0.30);
+        margin: 0 6px;
+        transform: translateY(-5px);
       }
       .menu-item-price {
         font-family: 'Cormorant Garamond', serif;
@@ -699,7 +778,7 @@
         font-style: italic;
         font-size: 14.5px;
         color: var(--ink-secondary);
-        margin-top: 4px;
+        margin: 4px 0 0;
         line-height: 1.45;
         display: -webkit-box;
         -webkit-line-clamp: 2;
@@ -721,22 +800,6 @@
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
       }
 
-      /* ─── Pie de página tipo libro ─────────────────────────────── */
-      .book-pageno {
-        position: absolute;
-        bottom: 18px;
-        left: 0;
-        right: 0;
-        text-align: center;
-        font-family: 'Cormorant Garamond', serif;
-        font-size: 13px;
-        color: var(--ink-muted);
-        letter-spacing: 0.2em;
-        pointer-events: none;
-        opacity: 0.7;
-      }
-
-      /* Vacío elegante */
       .menu-empty {
         text-align: center;
         padding: 60px 20px;
@@ -749,358 +812,346 @@
         margin-bottom: 8px;
       }
 
-      /* ─── Tabs del header — estilo carta ───────────────────────── */
-      .menu-tabs-wrap {
-        background: linear-gradient(
-          to bottom,
-          rgba(20, 12, 5, 0.9),
-          rgba(20, 12, 5, 0.85)
-        );
-        border-bottom: 1px solid rgba(184, 137, 62, 0.25);
-        backdrop-filter: saturate(180%) blur(14px);
-        -webkit-backdrop-filter: saturate(180%) blur(14px);
-      }
-      .menu-tab {
-        font-family: 'Cormorant Garamond', serif;
-        font-size: 16px;
-        font-weight: 500;
-        color: #d8c79c;
-        padding: 8px 16px;
-        border-radius: 999px;
-        white-space: nowrap;
-        letter-spacing: 0.02em;
-        transition: all 200ms;
-        background: transparent;
-        border: 1px solid transparent;
-      }
-      .menu-tab:active { transform: scale(0.96); }
-      .menu-tab.is-active {
-        color: #1a0e05;
-        background: linear-gradient(to bottom, #f0deab, #c9a560);
-        border-color: rgba(255, 255, 255, 0.4);
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-        font-weight: 700;
-      }
-
-      /* Header del restaurante */
-      .menu-header {
-        background: linear-gradient(
-          to bottom,
-          rgba(15, 8, 3, 0.95),
-          rgba(15, 8, 3, 0.85)
-        );
-        color: #f4e8cf;
-        border-bottom: 1px solid rgba(184, 137, 62, 0.3);
-      }
-      .menu-header-tenant {
-        font-family: 'Inter', sans-serif;
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: 0.3em;
-        text-transform: uppercase;
-        color: var(--gold);
-      }
-      .menu-header-title {
-        font-family: 'Cormorant Garamond', serif;
-        font-size: 22px;
-        font-weight: 600;
-        color: #f4e8cf;
-        letter-spacing: 0.02em;
-      }
-
-      /* Flechas (más sutiles, doradas, integradas al look) */
+      /* =================================================================
+         FLECHAS DE NAVEGACIÓN — chevron sutil sin contenedor
+         ================================================================= */
       .book-arrow {
         position: absolute;
         top: 50%;
         transform: translateY(-50%);
-        width: 46px;
-        height: 46px;
-        border-radius: 9999px;
-        background: linear-gradient(to bottom, #2a1a0a, #160a04);
-        border: 1px solid var(--gold-dark);
+        width: 32px;
+        height: 60px;
         display: flex;
         align-items: center;
         justify-content: center;
         z-index: 5;
-        color: var(--gold);
-        box-shadow:
-          0 4px 14px rgba(0, 0, 0, 0.5),
-          inset 0 1px 0 rgba(255, 255, 255, 0.08);
-        transition: transform 120ms, opacity 200ms;
+        color: var(--gold-light);
+        opacity: 0.55;
+        transition: opacity 200ms, transform 100ms;
       }
-      .book-arrow:active {
-        transform: translateY(-50%) scale(0.92);
+      .book-arrow:hover { opacity: 1; }
+      .book-arrow:active { transform: translateY(-50%) scale(0.9); }
+      .book-arrow:disabled { opacity: 0.15; pointer-events: none; }
+      .book-arrow.prev { left: 6px; }
+      .book-arrow.next { right: 6px; }
+
+      /* =================================================================
+         CART FAB (botón flotante de "Ver mi pedido")
+         ================================================================= */
+      #cart-fab {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        padding: 0 16px max(env(safe-area-inset-bottom), 8px);
+        z-index: 20;
       }
-      .book-arrow:disabled {
-        opacity: 0.25;
-        pointer-events: none;
+      #cart-fab.hidden { display: none; }
+      .cart-fab-btn {
+        width: 100%;
+        background: var(--gold);
+        color: #1a0e05;
+        padding: 16px 20px;
+        border-radius: 18px;
+        font-weight: 700;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        font-family: 'Inter', sans-serif;
       }
-      .book-arrow.prev { left: 8px; }
-      .book-arrow.next { right: 8px; }
+      .cart-fab-btn:hover { background: var(--gold-light); }
+      .cart-count {
+        background: rgba(255, 255, 255, 0.30);
+        padding: 4px 10px;
+        border-radius: 9999px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .cart-total {
+        font-size: 17px;
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* =================================================================
+         MODALES (producto + carrito)
+         ================================================================= */
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        z-index: 30;
+        background: rgba(0, 0, 0, 0.6);
+        display: flex;
+        align-items: flex-end;
+        justify-content: center;
+        padding: 0;
+      }
+      .modal-backdrop.hidden { display: none; }
+      .modal-sheet {
+        background: var(--paper-cream);
+        width: 100%;
+        max-width: 520px;
+        border-radius: 24px 24px 0 0;
+        max-height: 92vh;
+        overflow-y: auto;
+        padding-bottom: max(env(safe-area-inset-bottom), 12px);
+      }
+      @media (min-width: 640px) {
+        .modal-backdrop { align-items: center; }
+        .modal-sheet { border-radius: 18px; max-height: 88vh; }
+      }
+      .modal-content { padding: 22px; }
+
+      /* =================================================================
+         TRACKING DEL PEDIDO
+         ================================================================= */
+      .screen-tracking { color: #f4e8cf; padding: 30px 20px; }
+      .screen-tracking.hidden { display: none !important; }
+      .track-icon-wrap {
+        width: 96px;
+        height: 96px;
+        margin: 12px auto 20px;
+        border-radius: 9999px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(184, 137, 62, 0.18);
+      }
+      .track-title {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 28px;
+        text-align: center;
+        margin: 0 0 6px;
+      }
+      .track-msg {
+        text-align: center;
+        color: #c8b88e;
+        max-width: 320px;
+        margin: 0 auto 14px;
+      }
+      .track-order-no {
+        text-align: center;
+        font-size: 12px;
+        color: rgba(244, 232, 207, 0.6);
+        margin-bottom: 24px;
+      }
+      .track-order-no span {
+        font-family: 'Cormorant Garamond', serif;
+        font-weight: 700;
+        color: #f4e8cf;
+      }
+      .track-card {
+        background: rgba(244, 232, 207, 0.07);
+        border: 1px solid rgba(244, 232, 207, 0.15);
+        border-radius: 16px;
+        padding: 16px;
+        margin-bottom: 14px;
+      }
+      .track-card h2 {
+        font-size: 13px;
+        font-weight: 600;
+        margin: 0 0 10px;
+        color: #c8b88e;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+      .track-total {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(244, 232, 207, 0.15);
+        display: flex;
+        justify-content: space-between;
+        font-weight: 700;
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 18px;
+      }
+      .track-total .v { color: var(--gold-light); }
+      .track-refresh-status {
+        text-align: center;
+        font-size: 11px;
+        color: rgba(244, 232, 207, 0.5);
+        margin: 0 0 16px;
+      }
+      .track-restart {
+        width: 100%;
+        padding: 14px;
+        background: rgba(244, 232, 207, 0.12);
+        color: #f4e8cf;
+        border-radius: 9999px;
+        font-weight: 600;
+        font-family: 'Inter', sans-serif;
+      }
+
+      /* =================================================================
+         RESPONSIVE
+         ================================================================= */
       @media (max-width: 480px) {
-        .book-arrow { width: 38px; height: 38px; }
-        .book-arrow.prev { left: 4px; }
-        .book-arrow.next { right: 4px; }
         .chapter-title { font-size: 30px; }
-        .book-page-inner { padding: 30px 22px 50px 28px; }
+        .book-page-inner { padding: 32px 22px 52px 28px; }
         .menu-item-name { font-size: 19px; }
+        .book-arrow { width: 28px; height: 50px; }
+        .cover-title { font-size: 42px; }
+        .cover-pretitle { font-size: 26px; }
+        #book-pages {
+          height: calc(100vh - 180px);
+        }
+      }
+
+      /* =================================================================
+         REDUCED MOTION — accesibilidad
+         Los usuarios con "Reduce motion" activado en SO ven un crossfade
+         simple en vez del flip 3D. Estándar WCAG y respeta lo que
+         configura el usuario.
+         ================================================================= */
+      @media (prefers-reduced-motion: reduce) {
+        .book-page.is-leaving-forward,
+        .book-page.is-entering-backward-flip {
+          animation: simpleFade 240ms ease both !important;
+        }
+        .book-page-shadow { display: none; }
+        @keyframes simpleFade {
+          from { opacity: 1; }
+          to { opacity: 0; }
+        }
       }
     </style>
   </head>
-  <body class="text-slate-900 font-sans antialiased book-mode">
+  <body class="book-mode">
     <!--
       =============================================================
-      PANTALLA 1 — Loading (skeleton)
+      PANTALLA 1 — Loading (skeleton oscuro sobre el fondo madera)
       =============================================================
     -->
-    <section id="screen-loading" class="min-h-screen safe-top safe-bottom">
-      <div class="px-4 pt-6">
-        <div class="h-7 w-1/2 rounded-md shimmer"></div>
-        <div class="h-4 w-1/3 mt-2 rounded-md shimmer"></div>
+    <section id="screen-loading" class="screen-loading safe-top safe-bottom">
+      <div style="margin: 0 16px">
+        <div class="shimmer" style="height: 28px; width: 60%"></div>
+        <div class="shimmer" style="height: 16px; width: 40%; margin-top: 10px"></div>
       </div>
-      <div class="mt-6 px-4 flex gap-2 overflow-x-auto no-scrollbar">
-        <div class="h-9 w-20 rounded-full shimmer flex-shrink-0"></div>
-        <div class="h-9 w-24 rounded-full shimmer flex-shrink-0"></div>
-        <div class="h-9 w-16 rounded-full shimmer flex-shrink-0"></div>
-        <div class="h-9 w-28 rounded-full shimmer flex-shrink-0"></div>
+      <div style="margin: 28px 16px 0; display: flex; gap: 8px; overflow-x: auto" class="no-scrollbar">
+        <div class="shimmer" style="height: 36px; width: 90px; border-radius: 9999px; flex-shrink: 0"></div>
+        <div class="shimmer" style="height: 36px; width: 100px; border-radius: 9999px; flex-shrink: 0"></div>
+        <div class="shimmer" style="height: 36px; width: 80px; border-radius: 9999px; flex-shrink: 0"></div>
       </div>
-      <div class="mt-6 px-4 space-y-3">
-        <div class="h-24 rounded-2xl shimmer"></div>
-        <div class="h-24 rounded-2xl shimmer"></div>
-        <div class="h-24 rounded-2xl shimmer"></div>
+      <div style="margin: 28px 16px 0; display: flex; flex-direction: column; gap: 14px">
+        <div class="shimmer" style="height: 100px; border-radius: 14px"></div>
+        <div class="shimmer" style="height: 100px; border-radius: 14px"></div>
       </div>
     </section>
 
     <!--
       =============================================================
-      PANTALLA 2 — Error (token inválido, QR desactivado, etc.)
+      PANTALLA 2 — Error
       =============================================================
     -->
-    <section
-      id="screen-error"
-      class="hidden min-h-screen flex flex-col items-center justify-center px-6 text-center safe-top safe-bottom"
-    >
-      <div class="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mb-5">
-        <svg
-          class="w-10 h-10 text-red-500"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
+    <section id="screen-error" class="screen-error hidden safe-top safe-bottom">
+      <div class="error-icon">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
       </div>
-      <h1 class="text-2xl font-bold mb-2">Ups, no podemos cargar la carta</h1>
-      <p id="error-message" class="text-slate-600 max-w-xs">
-        Pedile al mozo el QR nuevo.
-      </p>
-      <button
-        onclick="location.reload()"
-        class="mt-6 px-6 py-3 bg-brand text-white rounded-full font-semibold btn-press"
-      >
-        Reintentar
-      </button>
+      <h1 class="error-title">Ups, no podemos cargar la carta</h1>
+      <p id="error-message" class="error-msg">Pedile al mozo el QR nuevo.</p>
+      <button class="error-retry btn-press" onclick="location.reload()">Reintentar</button>
     </section>
 
     <!--
       =============================================================
-      PANTALLA 3 — Carta (categorías + productos)
+      PANTALLA 3 — Carta (libro)
       =============================================================
     -->
-    <section id="screen-menu" class="hidden min-h-screen pb-28">
-      <!-- Header del restaurante: monograma + nombre del lugar +
-           destino del QR. Estética de carta de restaurante fino. -->
+    <section id="screen-menu" class="screen-menu hidden">
       <header class="menu-header safe-top">
-        <div class="px-5 py-4 text-center">
-          <p
-            id="tenant-name"
-            class="menu-header-tenant"
-          ></p>
-          <h1 id="qr-label" class="menu-header-title mt-1"></h1>
-        </div>
+        <p id="tenant-name" class="menu-header-tenant"></p>
+        <h1 id="qr-label" class="menu-header-title"></h1>
       </header>
 
-      <!-- Tabs de categorías (sticky en scroll). Estética editorial:
-           tipografía serif, dorado en la activa, fondo oscuro. -->
-      <nav
-        id="categories-tabs"
-        class="sticky top-0 z-10 menu-tabs-wrap px-4 py-3 flex gap-2 overflow-x-auto no-scrollbar"
-      >
+      <nav id="categories-tabs" class="menu-tabs-wrap no-scrollbar">
         <!-- Tabs se inyectan via JS -->
       </nav>
 
-      <!-- Carta como LIBRO — cada categoría es una página y al cambiar
-           hacemos un flip 3D. El "stage" es el contenedor con
-           perspective; las páginas viven adentro posicionadas
-           absolutamente. -->
-      <div class="relative pt-5 pb-6">
+      <div class="book-wrap">
         <div id="book-stage" class="book-stage">
           <div class="book-spine"></div>
           <div class="book-bookmark"></div>
-          <!-- Flechas (visibles cuando se puede ir adelante/atrás) -->
-          <button
-            id="book-prev"
-            class="book-arrow prev"
-            aria-label="Página anterior"
-            onclick="App.prevPage()"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+
+          <button id="book-prev" class="book-arrow prev" aria-label="Página anterior" onclick="App.prevPage()">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M15 18l-6-6 6-6"/>
+            </svg>
           </button>
-          <button
-            id="book-next"
-            class="book-arrow next"
-            aria-label="Página siguiente"
-            onclick="App.nextPage()"
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          <button id="book-next" class="book-arrow next" aria-label="Página siguiente" onclick="App.nextPage()">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M9 18l6-6-6-6"/>
+            </svg>
           </button>
+
           <div id="book-pages">
             <!-- Páginas inyectadas via JS -->
           </div>
         </div>
       </div>
 
-      <!-- Footer fijo: botón ver carrito (visible solo si hay items) -->
-      <div
-        id="cart-fab"
-        class="hidden fixed left-0 right-0 bottom-0 z-20 px-4 safe-bottom"
-      >
-        <button
-          onclick="App.openCart()"
-          class="w-full bg-brand hover:bg-brand-dark text-white py-4 rounded-2xl font-bold shadow-2xl btn-press flex items-center justify-between px-5"
-        >
-          <span class="flex items-center gap-2">
-            <span
-              id="cart-count"
-              class="bg-white/25 px-2.5 py-0.5 rounded-full text-sm font-bold"
-            ></span>
+      <div id="cart-fab" class="hidden">
+        <button class="cart-fab-btn btn-press" onclick="App.openCart()">
+          <span style="display: flex; align-items: center; gap: 10px">
+            <span id="cart-count" class="cart-count"></span>
             <span>Ver mi pedido</span>
           </span>
-          <span id="cart-total" class="text-lg"></span>
+          <span id="cart-total" class="cart-total"></span>
         </button>
       </div>
     </section>
 
-    <!--
-      =============================================================
-      MODAL — Detalle producto (cantidad + notas + add to cart)
-      =============================================================
-    -->
-    <div
-      id="modal-product"
-      class="hidden fixed inset-0 z-30 bg-black/50 flex items-end sm:items-center justify-center"
-      onclick="App.closeProduct(event)"
-    >
-      <div
-        class="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-3xl max-h-[90vh] overflow-y-auto safe-bottom"
-        onclick="event.stopPropagation()"
-      >
-        <div id="product-detail" class="p-5">
-          <!-- Se inyecta via JS -->
-        </div>
+    <!-- Modal producto -->
+    <div id="modal-product" class="modal-backdrop hidden" onclick="App.closeProduct(event)">
+      <div class="modal-sheet" onclick="event.stopPropagation()">
+        <div id="product-detail" class="modal-content"></div>
+      </div>
+    </div>
+
+    <!-- Modal carrito -->
+    <div id="modal-cart" class="modal-backdrop hidden" onclick="App.closeCart(event)">
+      <div class="modal-sheet" onclick="event.stopPropagation()">
+        <div id="cart-detail" class="modal-content"></div>
       </div>
     </div>
 
     <!--
       =============================================================
-      MODAL — Carrito + checkout
+      PANTALLA 4 — Tracking
       =============================================================
     -->
-    <div
-      id="modal-cart"
-      class="hidden fixed inset-0 z-30 bg-black/50 flex items-end sm:items-center justify-center"
-      onclick="App.closeCart(event)"
-    >
-      <div
-        class="bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-3xl max-h-[92vh] overflow-y-auto safe-bottom"
-        onclick="event.stopPropagation()"
-      >
-        <div id="cart-detail" class="p-5">
-          <!-- Se inyecta via JS -->
+    <section id="screen-tracking" class="screen-tracking hidden safe-top safe-bottom">
+      <div id="track-icon" class="track-icon-wrap"></div>
+      <h1 id="track-title" class="track-title"></h1>
+      <p id="track-message" class="track-msg"></p>
+      <p class="track-order-no">Pedido <span id="track-order-number"></span></p>
+
+      <div style="margin-bottom: 24px;">
+        <div id="track-timeline" style="position: relative; padding-left: 24px;"></div>
+      </div>
+
+      <div class="track-card">
+        <h2>Tu pedido</h2>
+        <div id="track-items" style="display: flex; flex-direction: column; gap: 6px;"></div>
+        <div class="track-total">
+          <span>Total</span>
+          <span id="track-total" class="v"></span>
         </div>
       </div>
-    </div>
 
-    <!--
-      =============================================================
-      PANTALLA 4 — Tracking del pedido (estado en vivo)
-      Reemplaza la pantalla de confirmación estática. Es lo que el
-      cliente ve inmediatamente después de enviar, con auto-refresh
-      cada 15s para que vea cómo avanza ("aprobado" → "en preparación"
-      → "listo") sin tener que preguntar al mesero.
-      =============================================================
-    -->
-    <section
-      id="screen-tracking"
-      class="hidden min-h-screen safe-top safe-bottom"
-    >
-      <div class="px-5 pt-8 pb-6">
-        <!-- Badge grande del estado actual -->
-        <div
-          id="track-icon"
-          class="w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-5 transition-colors"
-        >
-          <!-- icono inyectado por JS -->
-        </div>
+      <p class="track-refresh-status">
+        <span id="track-refresh-status">Se actualiza solo cada 15 segundos</span>
+      </p>
 
-        <h1 id="track-title" class="text-2xl font-bold text-center mb-1"></h1>
-        <p
-          id="track-message"
-          class="text-slate-600 text-center max-w-xs mx-auto mb-4"
-        ></p>
-
-        <p class="text-slate-500 text-xs text-center">
-          Pedido
-          <span
-            id="track-order-number"
-            class="font-mono font-bold text-slate-900"
-          ></span>
-        </p>
-
-        <!-- Timeline visual de estados -->
-        <div class="mt-8 mb-6">
-          <div id="track-timeline" class="relative pl-8">
-            <!-- Steps inyectados por JS -->
-          </div>
-        </div>
-
-        <!-- Items del pedido (recordatorio) -->
-        <div class="bg-white rounded-2xl border border-slate-200 p-4 mb-4">
-          <h2 class="font-bold text-sm text-slate-700 mb-2">Tu pedido</h2>
-          <div id="track-items" class="space-y-1.5"></div>
-          <div
-            class="mt-3 pt-3 border-t border-slate-100 flex justify-between font-bold"
-          >
-            <span>Total</span>
-            <span id="track-total" class="text-brand"></span>
-          </div>
-        </div>
-
-        <!-- Indicador de refresh -->
-        <p class="text-xs text-slate-400 text-center mb-4">
-          <span id="track-refresh-status">Se actualiza solo cada 15 segundos</span>
-        </p>
-
-        <button
-          onclick="App.startOver()"
-          class="w-full py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full font-semibold btn-press"
-        >
-          Hacer otro pedido
-        </button>
-      </div>
+      <button class="track-restart btn-press" onclick="App.startOver()">Hacer otro pedido</button>
     </section>
 
     <!--
       Cache-busting: bumpear el `?v=` cada vez que `app.js` cambia para
-      que los navegadores / Caddy no sirvan la versión vieja. Si esto
-      no se actualiza, el browser puede ejecutar JS nuevo con HTML
-      viejo (o al revés) y todo revienta con errores tipo null.
+      forzar a Caddy y al browser a soltar el caché viejo.
     -->
-    <script src="./app.js?v=20260614-4"></script>
+    <script src="./app.js?v=20260614-5"></script>
   </body>
 </html>

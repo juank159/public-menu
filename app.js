@@ -210,25 +210,23 @@
     if (!nav) return;
     nav.innerHTML = '';
     const mode = getBookMode();
-    state.categories.forEach((cat, idx) => {
+    state.categories.forEach((cat, catIdx) => {
       const btn = document.createElement('button');
-      const isActive = idx === state.bookIndex;
-      btn.className = `flex-shrink-0 menu-tab btn-press ${
-        isActive ? 'is-active' : ''
-      }`;
+      // bookIndex 0 = portada; las categorías empiezan en bookIndex 1.
+      // La categoría con catIdx N está en bookIndex N+1.
+      const pageIdx = catIdx + 1;
+      const isActive = pageIdx === state.bookIndex;
+      btn.className = `menu-tab btn-press ${isActive ? 'is-active' : ''}`;
       btn.textContent = cat.name;
       btn.onclick = () => {
         if (mode === 'book') {
-          goToPage(idx);
+          goToPage(pageIdx);
         } else {
-          // Legacy: scroll suave a la sección apilada.
-          state.bookIndex = idx;
-          state.activeCategoryId = state.categories[idx].id;
+          state.bookIndex = pageIdx;
+          state.activeCategoryId = cat.id;
           renderTabs();
           const target = document.getElementById(`cat-${cat.id}`);
-          if (target) {
-            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
+          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
       };
       if (isActive) {
@@ -294,6 +292,12 @@
     return null;
   }
 
+  /// Total de páginas del libro incluyendo la portada (índice 0).
+  /// state.bookIndex 0 = portada; 1..N = categorías.
+  function totalPages() {
+    return state.categories.length + 1; // +1 por la portada
+  }
+
   function renderCategories() {
     const mode = getBookMode();
     if (mode === 'legacy') return renderCategoriesLegacy();
@@ -309,25 +313,32 @@
       const empty = document.createElement('div');
       empty.className = 'book-page is-active';
       empty.innerHTML = `
+        <div class="book-page-back"></div>
         <div class="book-page-inner">
           <div class="menu-empty">
             <p>La carta aún no fue servida.</p>
             <p style="font-size: 14px; font-style: italic; opacity: 0.8;">${escapeHtml(msg)}</p>
           </div>
-        </div>`;
+        </div>
+        <div class="book-page-shadow"></div>`;
       root.appendChild(empty);
       updateNavButtons();
       return;
     }
 
-    // Acotar bookIndex por si las categorías cambiaron y el índice
-    // anterior quedó fuera de rango.
-    if (state.bookIndex >= state.categories.length) state.bookIndex = 0;
+    // Página 0 = portada; 1..N = categorías. Acotar bookIndex.
+    if (state.bookIndex >= totalPages()) state.bookIndex = 0;
     if (state.bookIndex < 0) state.bookIndex = 0;
 
-    state.categories.forEach((cat, idx) => {
-      const page = buildPage(cat, idx);
-      if (idx === state.bookIndex) {
+    const cover = buildCoverPage();
+    if (state.bookIndex === 0) cover.classList.add('is-active');
+    else cover.classList.add('is-hidden');
+    root.appendChild(cover);
+
+    state.categories.forEach((cat, catIdx) => {
+      const pageIdx = catIdx + 1; // 0 reservado para portada
+      const page = buildCategoryPage(cat, pageIdx);
+      if (pageIdx === state.bookIndex) {
         page.classList.add('is-active');
       } else {
         page.classList.add('is-hidden');
@@ -350,35 +361,97 @@
     return romans[n] || String(n);
   }
 
-  function buildPage(cat, idx) {
+  /// Construye un elemento `.book-page` con los hijos comunes (backface,
+  /// inner, sombra proyectada, número de página). El contenido específico
+  /// lo monta el caller dentro de `inner`.
+  function buildPageShell(idx, total) {
     const page = document.createElement('article');
     page.className = 'book-page';
-    page.dataset.categoryId = cat.id;
-    page.dataset.idx = String(idx);
 
-    // Backface: el "reverso" de la hoja, visible durante el flip
-    // cuando la página pasa la marca de 90°. Sin esto el flip se ve
-    // como un agujero porque la cara frontal está oculta y no hay
-    // nada que pintar atrás.
     const back = document.createElement('div');
     back.className = 'book-page-back';
     page.appendChild(back);
 
     const inner = document.createElement('div');
     inner.className = 'book-page-inner';
+    page.appendChild(inner);
 
-    // Header del capítulo: ornamento ─◆─ + "Capítulo N" en romano +
-    // título de la categoría grande en serifa + flourish manuscrito +
-    // divisor ornamental con motivo central.
+    // Sombra de proyección durante el flip — vive como hijo para que
+    // podamos animar su opacity/transform en GPU. Evita animar
+    // box-shadow (que va por CPU y come frames).
+    const shadow = document.createElement('div');
+    shadow.className = 'book-page-shadow';
+    page.appendChild(shadow);
+
+    // Número de página al pie en romano (sin "Capítulo X" — esa
+    // etiqueta era demasiado pretenciosa para una carta normal).
+    if (idx > 0) {
+      const pageno = document.createElement('div');
+      pageno.className = 'book-pageno';
+      pageno.textContent = `~ ${toRoman(idx)} ~`;
+      page.appendChild(pageno);
+    }
+
+    return { page, inner };
+  }
+
+  /// Portada del libro — primera página visible cuando se abre la carta.
+  /// Mostrar una "tapa" antes del contenido refuerza la sensación de
+  /// libro físico (siempre lo abrís por la tapa, no en el medio).
+  function buildCoverPage() {
+    const { page, inner } = buildPageShell(0, 0);
+    page.dataset.isCover = '1';
+    inner.innerHTML = `
+      <div class="cover">
+        <div class="cover-ornament-top">
+          <svg width="80" height="20" viewBox="0 0 80 20" fill="none" stroke="currentColor" stroke-width="1">
+            <path d="M0 10 L30 10" />
+            <circle cx="40" cy="10" r="4" />
+            <path d="M50 10 L80 10" />
+            <path d="M36 10 L40 6 L44 10 L40 14 Z" fill="currentColor" stroke="none" />
+          </svg>
+        </div>
+        <p class="cover-pretitle">la</p>
+        <h1 class="cover-title">Carta</h1>
+        <div class="cover-rule"></div>
+        <p class="cover-tenant" id="cover-tenant"></p>
+        <p class="cover-destination" id="cover-destination"></p>
+        <div class="cover-ornament-bottom">
+          <svg width="60" height="20" viewBox="0 0 60 20" fill="none" stroke="currentColor" stroke-width="1">
+            <path d="M0 10 L25 10" />
+            <path d="M28 10 L30 7 L32 10 L30 13 Z" fill="currentColor" stroke="none" />
+            <path d="M35 10 L60 10" />
+          </svg>
+        </div>
+      </div>
+      <div class="cover-hint">Pasá la página para empezar</div>
+    `;
+
+    // Inyectar tenant + destino del QR (ya tenemos esos datos en state).
+    requestAnimationFrame(() => {
+      const tEl = inner.querySelector('#cover-tenant');
+      const dEl = inner.querySelector('#cover-destination');
+      if (tEl) tEl.textContent = state.destination?.label ? 'Bienvenido a' : '';
+      if (dEl) dEl.textContent = state.destination?.label || '';
+    });
+
+    return page;
+  }
+
+  /// Página de categoría: ornamento + título + divisor + lista de
+  /// productos. Sin "Capítulo X" — solo el título grande + el número de
+  /// página al pie.
+  function buildCategoryPage(cat, idx) {
+    const { page, inner } = buildPageShell(idx, state.categories.length);
+    page.dataset.categoryId = cat.id;
+    page.dataset.idx = String(idx);
     inner.innerHTML = `
       <div class="chapter-ornament">
         <div class="line"></div>
         <div class="diamond"></div>
         <div class="line"></div>
       </div>
-      <p class="chapter-roman">Capítulo ${toRoman(idx + 1)}</p>
       <h2 class="chapter-title">${escapeHtml(cat.name)}</h2>
-      <div class="chapter-flourish">~ nuestras especialidades ~</div>
       <div class="chapter-divider">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1" style="color: var(--gold-dark);">
           <circle cx="7" cy="7" r="2.5" />
@@ -387,43 +460,46 @@
       </div>
       <div id="prods-${cat.id}"></div>
     `;
-    page.appendChild(inner);
-
-    // Pie tipo libro: "Página · N de M" (números romanos sutiles).
-    const pageno = document.createElement('div');
-    pageno.className = 'book-pageno';
-    pageno.textContent = `~ ${toRoman(idx + 1)} ~`;
-    page.appendChild(pageno);
 
     const prodsContainer = inner.querySelector(`#prods-${cat.id}`);
     cat.products.forEach((p) => {
       prodsContainer.appendChild(buildProductCard(p));
     });
-
     return page;
+  }
+
+  /// Mantenemos `buildPage(cat, idx)` por compatibilidad con código
+  /// que pudiera llamarlo, ahora delega en el helper específico.
+  function buildPage(cat, idx) {
+    return buildCategoryPage(cat, idx);
   }
 
   function updateNavButtons() {
     const prev = $('book-prev');
     const next = $('book-next');
     if (!prev || !next) return;
-    const last = state.categories.length - 1;
+    const last = totalPages() - 1;
     prev.disabled = state.bookIndex <= 0;
     next.disabled = state.bookIndex >= last;
   }
 
-  /// Pasar a la página `targetIdx` con animación. Dirección automática:
-  /// si vamos adelante usamos pageOutForward, si vamos atrás usamos
-  /// pageOutBackward — el efecto es que la hoja siempre se voltea hacia
-  /// el lado correcto.
+  /// Cambio de página con animación premium.
+  ///
+  /// **Forward** (avanzar): la página ACTUAL se voltea hacia la
+  /// izquierda y cae detrás del lomo. La siguiente queda visible.
+  ///
+  /// **Backward** (retroceder): la página ANTERIOR — que conceptualmente
+  /// estaba "doblada" detrás del lomo — viene levantándose desde -180°
+  /// y se asienta sobre la actual. La actual queda visible debajo.
+  /// En un libro real de UNA página visible, esto es lo correcto:
+  /// siempre giramos desde el mismo lomo (izquierda), nunca desde el
+  /// borde derecho.
   function goToPage(targetIdx) {
     if (state.bookAnimating) return;
     if (targetIdx === state.bookIndex) return;
-    if (targetIdx < 0 || targetIdx >= state.categories.length) return;
+    if (targetIdx < 0 || targetIdx >= totalPages()) return;
 
     const root = $('book-pages');
-    // Si el contenedor no existe (HTML legacy o no montado todavía),
-    // salimos silenciosamente — no queremos romper la pantalla.
     if (!root) return;
     const pages = root.querySelectorAll('.book-page');
     const current = pages[state.bookIndex];
@@ -433,49 +509,80 @@
     const forward = targetIdx > state.bookIndex;
     state.bookAnimating = true;
 
-    // PASO 1 — Mostrar la página destino DEBAJO (preview).
-    // Esto es lo que da la sensación de libro real: cuando levantas
-    // la página actual, ves la siguiente ya esperando abajo. Sin
-    // esto, durante el flip se ve un agujero negro y la siguiente
-    // página "aparece" de la nada al final.
-    target.classList.remove('is-hidden');
-    target.classList.remove('is-active');
-    target.classList.add('is-next-preview');
+    // Reduce motion: crossfade sin flip 3D para respetar accesibilidad.
+    const reduceMotion = window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    // PASO 2 — Empezar el flip de la página saliente.
-    // Usamos requestAnimationFrame doble para asegurar que el browser
-    // primero pintó el preview antes de empezar la animación —
-    // así el preview NO se ve "aparecer" sino que ya está ahí cuando
-    // la página de arriba empieza a levantarse.
-    requestAnimationFrame(() => {
+    if (forward) {
+      // FORWARD: target queda como preview debajo, current sale girando.
+      target.classList.remove('is-hidden');
+      target.classList.remove('is-active');
+      target.classList.add('is-next-preview');
+
       requestAnimationFrame(() => {
-        current.classList.remove('is-active');
-        current.classList.add(
-          forward ? 'is-leaving-forward' : 'is-leaving-backward',
-        );
+        requestAnimationFrame(() => {
+          current.classList.remove('is-active');
+          current.classList.add('is-leaving-forward');
+        });
       });
-    });
 
-    const onEnd = () => {
-      current.removeEventListener('animationend', onEnd);
-      current.classList.remove(
-        'is-leaving-forward',
-        'is-leaving-backward',
-      );
-      current.classList.add('is-hidden');
-      target.classList.remove('is-next-preview');
-      target.classList.add('is-active');
-      state.bookIndex = targetIdx;
-      state.activeCategoryId = state.categories[targetIdx].id;
+      const onEnd = () => {
+        current.removeEventListener('animationend', onEnd);
+        current.classList.remove('is-leaving-forward');
+        current.classList.add('is-hidden');
+        target.classList.remove('is-next-preview');
+        target.classList.add('is-active');
+        finalize(targetIdx);
+      };
+      current.addEventListener('animationend', onEnd);
+      if (reduceMotion) {
+        // En reduce-motion la animación dura 240ms; forzamos finalize
+        // por timeout por si animationend no dispara.
+        setTimeout(() => onEnd(), 260);
+      }
+    } else {
+      // BACKWARD: current queda como preview debajo, target ENTRA
+      // volteándose hacia abajo (de -180° a 0°). Sensación de "la hoja
+      // anterior cae sobre la actual".
+      current.classList.remove('is-active');
+      current.classList.add('is-next-preview');
+
+      target.classList.remove('is-hidden');
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          target.classList.add('is-entering-backward-flip');
+        });
+      });
+
+      const onEnd = () => {
+        target.removeEventListener('animationend', onEnd);
+        target.classList.remove('is-entering-backward-flip');
+        target.classList.add('is-active');
+        current.classList.remove('is-next-preview');
+        current.classList.add('is-hidden');
+        finalize(targetIdx);
+      };
+      target.addEventListener('animationend', onEnd);
+      if (reduceMotion) {
+        setTimeout(() => onEnd(), 260);
+      }
+    }
+
+    function finalize(idx) {
+      state.bookIndex = idx;
+      // Si la nueva página es la portada (idx 0), no hay categoría
+      // activa. Si es una categoría, sincronizamos el id.
+      if (idx === 0) {
+        state.activeCategoryId = null;
+      } else {
+        state.activeCategoryId = state.categories[idx - 1].id;
+      }
       state.bookAnimating = false;
-      renderTabs(); // refresca la tab activa
+      renderTabs();
       updateNavButtons();
-      // Llevar el scroll de la nueva página al tope (cada categoría
-      // tiene su propio área de scroll interna).
-      const inner = target.querySelector('.book-page-inner');
+      const inner = pages[idx].querySelector('.book-page-inner');
       if (inner) inner.scrollTop = 0;
-    };
-    current.addEventListener('animationend', onEnd);
+    }
   }
 
   function nextPage() {
@@ -485,12 +592,12 @@
     goToPage(state.bookIndex - 1);
   }
 
-  /// Swipe horizontal sobre el book-stage para pasar páginas. Tres
-  /// reglas pragmáticas para que el gesto se sienta natural:
-  ///  1. Si el desplazamiento vertical supera al horizontal antes del
-  ///     umbral, NO interpretamos como swipe (es scroll interno).
-  ///  2. Umbral de 60px o 25% del ancho del stage — lo que sea menor.
-  ///  3. Si el dedo se suelta antes del umbral, no pasamos página.
+  /// Gestos para pasar página — touch + mouse drag.
+  ///   - Touch (mobile): touchstart/move/end con lock direccional para
+  ///     no chocar con scroll vertical interno.
+  ///   - Mouse (desktop): mousedown + drag horizontal. Sin scroll
+  ///     interno horizontal, así que es directo.
+  ///   - Threshold: 60px o 25% del ancho, lo que sea menor.
   let gesturesBound = false;
   function bindBookGestures(root) {
     if (gesturesBound) return;
@@ -498,52 +605,67 @@
     let startX = 0;
     let startY = 0;
     let active = false;
-    let lockedDirection = null; // 'x' | 'y' | null
+    let lockedDirection = null;
 
-    root.addEventListener(
-      'touchstart',
-      (ev) => {
-        if (state.bookAnimating) return;
-        if (ev.touches.length !== 1) return;
-        startX = ev.touches[0].clientX;
-        startY = ev.touches[0].clientY;
-        active = true;
-        lockedDirection = null;
-      },
-      { passive: true },
-    );
-
-    root.addEventListener(
-      'touchmove',
-      (ev) => {
-        if (!active) return;
-        const dx = ev.touches[0].clientX - startX;
-        const dy = ev.touches[0].clientY - startY;
-        if (!lockedDirection) {
-          if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-            lockedDirection = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
-          }
+    function start(x, y) {
+      if (state.bookAnimating) return;
+      startX = x;
+      startY = y;
+      active = true;
+      lockedDirection = null;
+    }
+    function move(x, y) {
+      if (!active) return;
+      const dx = x - startX;
+      const dy = y - startY;
+      if (!lockedDirection) {
+        if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+          lockedDirection = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
         }
-      },
-      { passive: true },
-    );
+      }
+    }
+    function end(x) {
+      if (!active) return;
+      active = false;
+      if (lockedDirection !== 'x') return;
+      const dx = x - startX;
+      const stageW = root.getBoundingClientRect().width || 320;
+      const threshold = Math.min(60, stageW * 0.25);
+      if (Math.abs(dx) < threshold) return;
+      if (dx < 0) nextPage();
+      else prevPage();
+    }
 
-    root.addEventListener(
-      'touchend',
-      (ev) => {
-        if (!active) return;
-        active = false;
-        if (lockedDirection !== 'x') return;
-        const dx = ev.changedTouches[0].clientX - startX;
-        const stageW = root.getBoundingClientRect().width || 320;
-        const threshold = Math.min(60, stageW * 0.25);
-        if (Math.abs(dx) < threshold) return;
-        // Swipe a la izquierda = avanzar (siguiente categoría).
-        if (dx < 0) nextPage();
-        else prevPage();
-      },
-      { passive: true },
-    );
+    // Touch
+    root.addEventListener('touchstart', (ev) => {
+      if (ev.touches.length !== 1) return;
+      start(ev.touches[0].clientX, ev.touches[0].clientY);
+    }, { passive: true });
+    root.addEventListener('touchmove', (ev) => {
+      if (ev.touches.length !== 1) return;
+      move(ev.touches[0].clientX, ev.touches[0].clientY);
+    }, { passive: true });
+    root.addEventListener('touchend', (ev) => {
+      end(ev.changedTouches[0].clientX);
+    }, { passive: true });
+
+    // Mouse (desktop drag horizontal). Solo activamos si el target
+    // NO es un elemento interactivo (botón, link, input) — para no
+    // chocar con clicks reales.
+    root.addEventListener('mousedown', (ev) => {
+      if (ev.button !== 0) return; // sólo botón principal
+      const tag = (ev.target && ev.target.tagName) || '';
+      if (/^(BUTTON|A|INPUT|TEXTAREA|SELECT)$/.test(tag)) return;
+      if (ev.target.closest && ev.target.closest('.menu-item')) return;
+      start(ev.clientX, ev.clientY);
+    });
+    window.addEventListener('mousemove', (ev) => {
+      if (!active) return;
+      move(ev.clientX, ev.clientY);
+    });
+    window.addEventListener('mouseup', (ev) => {
+      end(ev.clientX);
+    });
   }
 
   function buildProductCard(product) {
@@ -1332,11 +1454,11 @@
         }))
         .filter((c) => c.products.length > 0);
 
-      // Arrancar el "libro" en la primera categoría. Sincronizamos
-      // activeCategoryId por si quedó algo del estado anterior.
+      // Arrancar siempre en la PORTADA (índice 0). Las categorías
+      // empiezan en índice 1. Esto refuerza la sensación de libro
+      // físico: lo abrís por la tapa, no por la mitad.
       state.bookIndex = 0;
-      state.activeCategoryId =
-        state.categories.length > 0 ? state.categories[0].id : null;
+      state.activeCategoryId = null;
 
       renderHeader();
       renderTabs();
