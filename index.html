@@ -575,6 +575,12 @@
       </div>
     </section>
 
-    <script src="./app.js"></script>
+    <!--
+      Cache-busting: bumpear el `?v=` cada vez que `app.js` cambia para
+      que los navegadores / Caddy no sirvan la versión vieja. Si esto
+      no se actualiza, el browser puede ejecutar JS nuevo con HTML
+      viejo (o al revés) y todo revienta con errores tipo null.
+    -->
+    <script src="./app.js?v=20260614-1"></script>
   </body>
 </html>

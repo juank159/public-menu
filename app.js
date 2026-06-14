@@ -207,7 +207,9 @@
 
   function renderTabs() {
     const nav = $('categories-tabs');
+    if (!nav) return;
     nav.innerHTML = '';
+    const mode = getBookMode();
     state.categories.forEach((cat, idx) => {
       const btn = document.createElement('button');
       const isActive = idx === state.bookIndex;
@@ -217,9 +219,20 @@
           : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
       }`;
       btn.textContent = cat.name;
-      btn.onclick = () => goToPage(idx);
-      // Scroll horizontal: si la tab activa quedó fuera del viewport
-      // (caso típico al saltar 5 categorías), centrarla suavemente.
+      btn.onclick = () => {
+        if (mode === 'book') {
+          goToPage(idx);
+        } else {
+          // Legacy: scroll suave a la sección apilada.
+          state.bookIndex = idx;
+          state.activeCategoryId = state.categories[idx].id;
+          renderTabs();
+          const target = document.getElementById(`cat-${cat.id}`);
+          if (target) {
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+      };
       if (isActive) {
         requestAnimationFrame(() => {
           btn.scrollIntoView({
@@ -233,13 +246,63 @@
     });
   }
 
+  /// ───── Modo LEGACY ─────────────────────────────────────────────
+  /// Render apilado clásico (todas las categorías en una columna,
+  /// scroll vertical único, tap en tab = smooth scroll a la sección).
+  /// Solo se activa si el HTML servido NO trae el contenedor de libro
+  /// — caso "navegador con HTML cacheado pre-libro pero JS nuevo".
+  function renderCategoriesLegacy() {
+    const root = $('categories-content');
+    if (!root) return;
+    root.innerHTML = '';
+    if (state.categories.length === 0) {
+      const msg = state.emptyReason || 'Pedile al mozo más info.';
+      root.innerHTML = `
+        <div class="text-center text-slate-500 py-12">
+          <p class="font-medium">No hay productos disponibles hoy.</p>
+          <p class="text-sm mt-1">${escapeHtml(msg)}</p>
+        </div>`;
+      return;
+    }
+    state.categories.forEach((cat) => {
+      const section = document.createElement('section');
+      section.id = `cat-${cat.id}`;
+      section.className = 'scroll-mt-16';
+      section.innerHTML = `
+        <h2 class="text-lg font-bold text-slate-800 mb-3">${escapeHtml(cat.name)}</h2>
+        <div class="space-y-3" id="prods-${cat.id}"></div>
+      `;
+      root.appendChild(section);
+      const prodsContainer = section.querySelector(`#prods-${cat.id}`);
+      cat.products.forEach((p) => {
+        prodsContainer.appendChild(buildProductCard(p));
+      });
+    });
+  }
+
   /// ───── Modo LIBRO ──────────────────────────────────────────────
   /// Cada categoría se renderiza como una "página" absoluta dentro de
   /// `#book-pages`. Solo la activa se muestra; las demás están con
   /// `is-hidden`. Al cambiar, animamos un flip 3D con `transform-origin`
   /// pegado al lomo izquierdo — emula pasar una hoja real.
 
+  /// Detecta el contenedor de categorías disponible en el DOM. Hay dos
+  /// posibles porque la versión anterior usaba `categories-content` y
+  /// la nueva (libro) usa `book-pages`. Si el browser todavía sirve
+  /// HTML cacheado, podríamos terminar con cualquiera de los dos.
+  function getBookMode() {
+    if ($('book-pages')) return 'book';
+    if ($('categories-content')) return 'legacy';
+    return null;
+  }
+
   function renderCategories() {
+    const mode = getBookMode();
+    if (mode === 'legacy') return renderCategoriesLegacy();
+    if (mode !== 'book') {
+      console.error('[public-menu] No encontramos contenedor de categorías. ¿HTML desactualizado?');
+      return;
+    }
     const root = $('book-pages');
     root.innerHTML = '';
 
@@ -327,6 +390,9 @@
     if (targetIdx < 0 || targetIdx >= state.categories.length) return;
 
     const root = $('book-pages');
+    // Si el contenedor no existe (HTML legacy o no montado todavía),
+    // salimos silenciosamente — no queremos romper la pantalla.
+    if (!root) return;
     const pages = root.querySelectorAll('.book-page');
     const current = pages[state.bookIndex];
     const target = pages[targetIdx];
