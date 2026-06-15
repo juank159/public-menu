@@ -50,7 +50,8 @@
     code: null,
     destination: null, // { type, label, table_element_id, zone_label }
     categories: [], // [{ id, name, products: [...] }] — agrupado en cliente
-    cart: [], // [{ product_id, name, unit_price, quantity, special_instructions }]
+    flavors: [], // [{ id, name, category_id }] — cremas por categoría
+    cart: [], // [{ product_id, name, unit_price, quantity, special_instructions, flavor_ids }]
     activeCategoryId: null,
     submitting: false,
     emptyReason: null,
@@ -133,11 +134,15 @@
    * línea separada (intencional: la cocina ve cada combinación aparte).
    */
   function addLine(line) {
+    // Distinta combinación de cremas = línea separada (clave para que el
+    // backend reciba los flavor_ids correctos por línea).
+    const flavorKey = (l) => (l.flavor_ids || []).join(',');
     const existingIdx = state.cart.findIndex(
       (it) =>
         it.product_id === line.product_id &&
         (it.variant_id || '') === (line.variant_id || '') &&
-        (it.special_instructions || '') === (line.special_instructions || ''),
+        (it.special_instructions || '') === (line.special_instructions || '') &&
+        flavorKey(it) === flavorKey(line),
     );
     if (existingIdx >= 0) {
       state.cart[existingIdx].quantity += line.quantity;
@@ -698,7 +703,14 @@
       name: v.name,
       price: base + (Number(v.price_modifier) || 0),
       is_default: !!v.is_default,
+      // Cuántas cremas/bolas exige esta variante (0 = ninguna).
+      scoopCount: Number(v.scoop_count) || 0,
     }));
+  }
+
+  /// Sabores/cremas disponibles para la categoría de un producto.
+  function flavorsForCategory(categoryId) {
+    return (state.flavors || []).filter((f) => f.category_id === categoryId);
   }
 
   /// Precio mínimo a mostrar como "desde $X" cuando hay variantes.
@@ -790,6 +802,46 @@
   // ---------------------------------------------------------------
   let modalProductState = null;
 
+  /// HTML del selector de cremas según la variante elegida. Una fila por
+  /// bola (con repetidos permitidos). Vacío si la variante no pide cremas.
+  function flavorSectionHtml() {
+    if (!modalProductState) return '';
+    const scoops = modalProductState.selectedFlavors.length;
+    if (scoops <= 0) return '';
+    const flavors = modalProductState.categoryFlavors;
+
+    if (flavors.length === 0) {
+      return `
+        <div class="pm-section-label">Cremas</div>
+        <p class="pm-flavor-empty">Todavía no hay cremas cargadas. Pedíselas al mozo.</p>`;
+    }
+
+    const slots = [];
+    for (let i = 0; i < scoops; i++) {
+      const sel = modalProductState.selectedFlavors[i] || '';
+      const options = [
+        `<option value="">Elegí…</option>`,
+        ...flavors.map(
+          (f) =>
+            `<option value="${escapeAttr(f.id)}" ${
+              sel === f.id ? 'selected' : ''
+            }>${escapeHtml(f.name)}</option>`,
+        ),
+      ].join('');
+      slots.push(`
+        <div class="pm-flavor-slot">
+          <span class="pm-flavor-num">Bola ${i + 1}</span>
+          <select class="pm-flavor-select" data-slot="${i}"
+                  onchange="App.selectFlavor(${i}, this.value)">
+            ${options}
+          </select>
+        </div>`);
+    }
+    return `
+      <div class="pm-section-label">Elegí tus cremas (${scoops})</div>
+      <div class="pm-flavors">${slots.join('')}</div>`;
+  }
+
   function renderProductModal(product) {
     const variants = normalizeVariants(product);
     const hasVariants = variants.length > 0;
@@ -812,6 +864,13 @@
       );
     }
 
+    // Cremas: lista de la categoría del producto + cuántas exige la
+    // variante elegida. `selectedFlavors[i]` = flavorId de la bola i.
+    const categoryFlavors = flavorsForCategory(product.category_id);
+    const initialScoops = hasVariants
+      ? variants[selectedVariantIdx].scoopCount
+      : 0;
+
     modalProductState = {
       product,
       variants,
@@ -819,6 +878,8 @@
       quantity: 1,
       special_instructions: '',
       unit_price: unitPrice,
+      categoryFlavors,
+      selectedFlavors: new Array(initialScoops).fill(''),
     };
 
     const variantsHtml = hasVariants
@@ -867,6 +928,8 @@
       <div class="pm-price" id="prod-price">${fmt(unitPrice)}</div>
 
       ${variantsHtml}
+
+      <div id="prod-flavors">${flavorSectionHtml()}</div>
 
       <div class="pm-section-label">Notas para la cocina (opcional)</div>
       <textarea
@@ -937,6 +1000,13 @@
                 : ''
             }
             ${
+              item.flavor_names && item.flavor_names.length
+                ? `<p class="cart-row-sub">🍦 ${escapeHtml(
+                    item.flavor_names.join(', '),
+                  )}</p>`
+                : ''
+            }
+            ${
               item.special_instructions
                 ? `<p class="cart-row-sub">“${escapeHtml(
                     item.special_instructions,
@@ -978,7 +1048,7 @@
         placeholder="Ej: Juan Pérez"
       />
 
-      <label class="cart-field-label">Teléfono <span class="req">*</span></label>
+      <label class="cart-field-label">Teléfono <span class="opt">(opcional)</span></label>
       <input
         id="cust-phone"
         class="cart-input"
@@ -1288,6 +1358,21 @@
     prevPage,
     goToPage,
 
+    /// Toast no bloqueante (avisos cortos, ej. "elegí las cremas").
+    toast(message) {
+      let el = $('app-toast');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'app-toast';
+        el.className = 'app-toast';
+        document.body.appendChild(el);
+      }
+      el.textContent = message;
+      el.classList.add('is-visible');
+      clearTimeout(el._t);
+      el._t = setTimeout(() => el.classList.remove('is-visible'), 2600);
+    },
+
     openProduct(product) {
       renderProductModal(product);
     },
@@ -1323,11 +1408,25 @@
         );
       });
 
+      // La cantidad de cremas depende de la variante (bolas). Reajustamos
+      // los slots y re-renderizamos el selector de cremas.
+      const scoops = variant.scoopCount || 0;
+      modalProductState.selectedFlavors = new Array(scoops).fill('');
+      const flavorsBox = $('prod-flavors');
+      if (flavorsBox) flavorsBox.innerHTML = flavorSectionHtml();
+
       // Refrescar precio mostrado + total del botón "Agregar".
       $('prod-price').textContent = fmt(variant.price);
       $('prod-total').textContent = fmt(
         variant.price * modalProductState.quantity,
       );
+    },
+
+    /// Elige la crema de la bola `slot` (permite repetir sabores).
+    selectFlavor(slot, flavorId) {
+      if (!modalProductState) return;
+      if (slot < 0 || slot >= modalProductState.selectedFlavors.length) return;
+      modalProductState.selectedFlavors[slot] = flavorId || '';
     },
 
     changeQty(delta) {
@@ -1383,10 +1482,31 @@
         unit_price,
         variants,
         selectedVariantIdx,
+        selectedFlavors,
+        categoryFlavors,
       } = modalProductState;
 
       const variant =
         selectedVariantIdx >= 0 ? variants[selectedVariantIdx] : null;
+
+      // Cremas: todas las bolas deben tener sabor elegido.
+      const scoops = selectedFlavors.length;
+      if (scoops > 0) {
+        if (categoryFlavors.length === 0) {
+          App.toast('Este producto necesita cremas y aún no hay cargadas.');
+          return;
+        }
+        if (selectedFlavors.some((f) => !f)) {
+          App.toast(`Elegí las ${scoops} cremas antes de agregar.`);
+          return;
+        }
+      }
+
+      // Nombres de las cremas para mostrar en el carrito (en orden de bola).
+      const flavorNames = selectedFlavors.map((id) => {
+        const f = categoryFlavors.find((x) => x.id === id);
+        return f ? f.name : '';
+      });
 
       addLine({
         product_id: product.id,
@@ -1396,6 +1516,8 @@
         unit_price,
         quantity,
         special_instructions: special_instructions || '',
+        flavor_ids: scoops > 0 ? [...selectedFlavors] : undefined,
+        flavor_names: scoops > 0 ? flavorNames : undefined,
       });
       persistCart();
       renderCartFab();
@@ -1446,11 +1568,12 @@
         errEl.classList.remove('hidden');
         return;
       }
-      // Validación mínima de teléfono (al menos 7 dígitos, no
-      // estricta — distintos países tienen formatos distintos).
+      // Teléfono OPCIONAL: solo validamos el formato si el cliente
+      // escribió algo. Si lo deja vacío, seguimos — exigirlo frenaba el
+      // pedido y muchos clientes no quieren dejarlo.
       const phoneDigits = phone.replace(/\D/g, '');
-      if (phoneDigits.length < 7) {
-        errEl.textContent = 'Teléfono inválido.';
+      if (phone.length > 0 && phoneDigits.length < 7) {
+        errEl.textContent = 'Teléfono inválido (dejalo vacío si no querés).';
         errEl.classList.remove('hidden');
         return;
       }
@@ -1469,13 +1592,15 @@
         const payload = {
           code: state.code,
           customer_name: name,
-          customer_phone: phone,
+          customer_phone: phone || undefined,
           notes: notes || undefined,
           items: state.cart.map((it) => ({
             product_id: it.product_id,
             variant_id: it.variant_id || undefined,
             quantity: it.quantity,
             special_instructions: it.special_instructions || undefined,
+            flavor_ids:
+              it.flavor_ids && it.flavor_ids.length ? it.flavor_ids : undefined,
           })),
         };
 
@@ -1556,6 +1681,9 @@
 
       state.destination = payload.destination || null;
       state.emptyReason = payload.empty_reason || null;
+
+      // Cremas/sabores disponibles (para productos de heladería).
+      state.flavors = payload.flavors || [];
 
       // Agrupar productos por categoría (el backend no lo hace por
       // razones de tamaño de payload — frontend lo arma).

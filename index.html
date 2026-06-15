@@ -1130,6 +1130,80 @@
       .pm-add:hover { background: var(--gold); }
       .pm-add-total { font-variant-numeric: tabular-nums; }
 
+      /* Selector de cremas (heladería) — una fila por bola */
+      .pm-flavors { display: flex; flex-direction: column; gap: 8px; }
+      .pm-flavor-slot {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .pm-flavor-num {
+        flex-shrink: 0;
+        min-width: 56px;
+        font-family: 'Inter', sans-serif;
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--ink-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .pm-flavor-select {
+        flex: 1;
+        appearance: none;
+        -webkit-appearance: none;
+        background: rgba(255, 255, 255, 0.55);
+        border: 1px solid rgba(120, 80, 20, 0.3);
+        border-radius: 12px;
+        padding: 11px 34px 11px 13px;
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 17px;
+        font-weight: 600;
+        color: var(--ink-primary);
+        /* Flecha dibujada con un gradiente cónico simple */
+        background-image:
+          linear-gradient(45deg, transparent 50%, var(--gold-dark) 50%),
+          linear-gradient(135deg, var(--gold-dark) 50%, transparent 50%);
+        background-position:
+          calc(100% - 18px) calc(50% - 2px),
+          calc(100% - 13px) calc(50% - 2px);
+        background-size: 5px 5px, 5px 5px;
+        background-repeat: no-repeat;
+      }
+      .pm-flavor-select:focus { outline: none; border-color: var(--gold-dark); }
+      .pm-flavor-empty {
+        font-family: 'Cormorant Garamond', serif;
+        font-style: italic;
+        color: var(--ink-muted);
+        margin: 0;
+      }
+
+      /* Toast no bloqueante */
+      .app-toast {
+        position: fixed;
+        left: 50%;
+        bottom: 90px;
+        transform: translateX(-50%) translateY(12px);
+        max-width: 88%;
+        background: var(--leather-dark);
+        color: #f4e8cf;
+        font-family: 'Inter', sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        padding: 12px 18px;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        border: 1px solid rgba(184, 137, 62, 0.4);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 200ms ease, transform 200ms ease;
+        z-index: 50;
+        text-align: center;
+      }
+      .app-toast.is-visible {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+
       /* =================================================================
          MODAL CARRITO (editorial)
          ================================================================= */
@@ -1245,6 +1319,7 @@
       .cart-error { color: #b03030; font-size: 13px; margin-top: 12px; }
       .cart-note { font-size: 12px; color: var(--ink-muted); margin-top: 12px; line-height: 1.5; }
       .req { color: #b03030; }
+      .opt { color: var(--ink-muted); font-weight: 400; font-size: 0.85em; }
 
       /* =================================================================
          TRACKING DEL PEDIDO
@@ -1577,6 +1652,6 @@
       Cache-busting: bumpear el `?v=` cada vez que `app.js` cambia para
       forzar a Caddy y al browser a soltar el caché viejo.
     -->
-    <script src="./app.js?v=20260614-6"></script>
+    <script src="./app.js?v=20260615-2"></script>
   </body>
 </html>
