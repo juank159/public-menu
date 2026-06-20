@@ -224,7 +224,7 @@
     $('tenant-name').textContent =
       state.destination?.type === 'table' ? 'Mesa' :
       state.destination?.type === 'zone' ? 'Zona' :
-      state.destination?.type === 'pickup' ? 'Pickup' : 'Carta';
+      state.destination?.type === 'pickup' ? 'Mostrador' : 'Carta';
     $('qr-label').textContent = label;
     document.title = `${label} — Carta`;
   }
