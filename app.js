@@ -779,11 +779,20 @@
       </div>
     `;
 
-    // Onerror: si la imagen falla (URL rota, 404), ocultar el <img>
-    // roto y mostrar el SVG placeholder en su lugar.
     if (hasImage) {
       const img = card.querySelector('.menu-item-thumb img');
       if (img) {
+        // Si la foto es muy vertical (ratio < 0.8 → botella, caja, etc.)
+        // usamos contain para no recortarla; si es cuadrada/paisaje usamos
+        // cover para que llene bien el espacio sin bordes vacíos.
+        const applyFit = function (el) {
+          if (el.naturalWidth / el.naturalHeight < 0.8) {
+            el.classList.add('img-portrait');
+          }
+        };
+        img.onload = function () { applyFit(this); };
+        // Imagen ya en caché: onload no dispara, revisar de inmediato
+        if (img.complete && img.naturalWidth > 0) applyFit(img);
         img.onerror = function () {
           const thumb = this.closest('.menu-item-thumb');
           if (thumb) {

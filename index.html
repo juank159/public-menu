@@ -748,8 +748,11 @@
         top: 0; left: 0;
         width: 100%;
         height: 100%;
+        object-fit: cover; /* JS lo cambia a contain si la foto es muy vertical */
+      }
+      .menu-item-thumb img.img-portrait {
         object-fit: contain;
-        padding: 6px;
+        padding: 8px;
       }
       .menu-item-thumb-placeholder {
         position: absolute;
@@ -1694,6 +1697,6 @@
       Cache-busting: bumpear el `?v=` cada vez que `app.js` cambia para
       forzar a Caddy y al browser a soltar el caché viejo.
     -->
-    <script src="./app.js?v=20260621-9"></script>
+    <script src="./app.js?v=20260621-11"></script>
   </body>
 </html>
