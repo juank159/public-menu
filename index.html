@@ -708,13 +708,32 @@
       /* =================================================================
          GRID 2 columnas — cards de tamaño idéntico
          ================================================================= */
+      /* Fallback flexbox para Chrome < 57 (gama baja antigua) */
       .menu-items-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
+        display: -webkit-box;
+        display: -ms-flexbox;
+        display: flex;
+        -ms-flex-wrap: wrap;
+        flex-wrap: wrap;
         gap: 10px;
+      }
+      .menu-item {
+        width: calc(50% - 5px);
+        -webkit-box-sizing: border-box;
+        box-sizing: border-box;
+      }
+      /* Grid real para Chrome 57+ */
+      @supports (display: grid) {
+        .menu-items-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+        }
+        .menu-item { width: auto; }
       }
       @media (min-width: 560px) {
         .menu-items-grid { grid-template-columns: repeat(3, 1fr); }
+        .menu-item { width: calc(33.333% - 7px); }
+        @supports (display: grid) { .menu-item { width: auto; } }
       }
 
       /* Card — SIN overflow:hidden para evitar el bug de Android Chrome.
@@ -730,26 +749,33 @@
       }
       .menu-item:active { transform: scale(0.97); }
 
-      /* Imagen — altura fija, position:absolute es la forma MÁS
-         CONFIABLE de aplicar object-fit:cover en todos los browsers */
+      /* Imagen — altura fija garantiza cards idénticas en cualquier browser */
       .menu-item-thumb {
         position: relative;
         width: 100%;
         height: 140px;
         overflow: hidden;
         border-radius: 9px 9px 0 0;
-        background: var(--paper-cream);
+        background: #f5ede0;
       }
       @media (min-width: 400px) { .menu-item-thumb { height: 155px; } }
       @media (min-width: 560px) { .menu-item-thumb { height: 160px; } }
 
+      /* Técnica sin object-fit: funciona en Chrome viejo, Samsung Internet,
+         UC Browser y cualquier WebView de gama baja.
+         max-width/max-height mantienen el aspect ratio;
+         top/left 50% + translate centra la imagen. */
       .menu-item-thumb img {
         position: absolute;
-        top: 0; left: 0;
-        width: 100%;
-        height: 100%;
-        object-fit: contain;
-        padding: 6px;
+        top: 50%;
+        left: 50%;
+        -webkit-transform: translate(-50%, -50%);
+        transform: translate(-50%, -50%);
+        max-width: calc(100% - 12px);
+        max-height: calc(100% - 12px);
+        width: auto;
+        height: auto;
+        display: block;
       }
       .menu-item-thumb-placeholder {
         position: absolute;
@@ -1694,6 +1720,6 @@
       Cache-busting: bumpear el `?v=` cada vez que `app.js` cambia para
       forzar a Caddy y al browser a soltar el caché viejo.
     -->
-    <script src="./app.js?v=20260621-12"></script>
+    <script src="./app.js?v=20260621-13"></script>
   </body>
 </html>
