@@ -290,7 +290,7 @@
       section.className = 'scroll-mt-16';
       section.innerHTML = `
         <h2 class="text-lg font-bold text-slate-800 mb-3">${escapeHtml(cat.name)}</h2>
-        <div class="space-y-3" id="prods-${cat.id}"></div>
+        <div class="menu-items-grid" id="prods-${cat.id}"></div>
       `;
       root.appendChild(section);
       const prodsContainer = section.querySelector(`#prods-${cat.id}`);
@@ -482,7 +482,7 @@
           <path d="M7 1.5v3M7 9.5v3M1.5 7h3M9.5 7h3" />
         </svg>
       </div>
-      <div id="prods-${cat.id}"></div>
+      <div id="prods-${cat.id}" class="menu-items-grid"></div>
     `;
 
     const prodsContainer = inner.querySelector(`#prods-${cat.id}`);
@@ -758,28 +758,29 @@
           ? `<div class="menu-item-thumb">
                <img src="${escapeAttr(product.image_url)}" alt="" loading="lazy" />
              </div>`
-          : ''
+          : `<div class="menu-item-thumb-placeholder">
+               <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round">
+                 <path d="M3 6h18M3 12h18M3 18h18" />
+               </svg>
+             </div>`
       }
       <div class="menu-item-body">
         ${badgeText ? `<span class="menu-item-badge">${escapeHtml(badgeText)}</span>` : ''}
-        <div class="menu-item-line">
-          <span class="menu-item-name">${escapeHtml(product.name)}</span>
-          <span class="menu-item-dots"></span>
-          <span class="menu-item-price">${priceHtml}</span>
-        </div>
+        <span class="menu-item-name">${escapeHtml(product.name)}</span>
         ${
           product.description
             ? `<p class="menu-item-desc">${escapeHtml(product.description)}</p>`
             : ''
         }
+        <div class="menu-item-line">
+          <span class="menu-item-price">${priceHtml}</span>
+          <button class="menu-item-add btn-press" type="button" aria-label="Agregar ${escapeAttr(product.name)}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        </div>
       </div>
-      <button class="menu-item-add btn-press" type="button" aria-label="Agregar ${escapeAttr(
-        product.name,
-      )}">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-      </button>
     `;
 
     // El "+" agrega sin abrir el modal cuando el plato no tiene variantes;
