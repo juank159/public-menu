@@ -492,7 +492,7 @@
       }
       .book-page-inner {
         position: relative;
-        padding: 42px 32px 56px 36px;
+        padding: 36px 18px 56px 22px;
         height: 100%;
         overflow-y: auto;
         overscroll-behavior: contain;
@@ -742,22 +742,24 @@
          Altura fija es lo más compatible con todos los browsers móviles. */
       .menu-item-thumb {
         width: 100%;
-        height: 130px;
+        height: 150px;
         overflow: hidden;
-        background: var(--paper-cream-deep);
+        background: var(--paper-cream);
         border-radius: 9px 9px 0 0;
-        display: block;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
       @media (min-width: 400px) {
-        .menu-item-thumb { height: 150px; }
+        .menu-item-thumb { height: 170px; }
       }
       @media (min-width: 560px) {
-        .menu-item-thumb { height: 160px; }
+        .menu-item-thumb { height: 190px; }
       }
       .menu-item-thumb img {
         width: 100%;
         height: 100%;
-        object-fit: cover;
+        object-fit: contain;
         display: block;
       }
       /* Placeholder cuando no hay imagen */
@@ -1544,7 +1546,7 @@
          ================================================================= */
       @media (max-width: 480px) {
         .chapter-title { font-size: 30px; }
-        .book-page-inner { padding: 32px 22px 52px 28px; }
+        .book-page-inner { padding: 28px 14px 52px 18px; }
         .menu-item-name { font-size: 19px; }
         .book-arrow { width: 28px; height: 50px; }
         .cover-title { font-size: 42px; }
@@ -1708,6 +1710,6 @@
       Cache-busting: bumpear el `?v=` cada vez que `app.js` cambia para
       forzar a Caddy y al browser a soltar el caché viejo.
     -->
-    <script src="./app.js?v=20260621-4"></script>
+    <script src="./app.js?v=20260621-5"></script>
   </body>
 </html>
