@@ -706,18 +706,21 @@
       }
 
       /* =================================================================
-         GRID DE PRODUCTOS — 2 columnas mobile, 3 en tablet+
+         DOS COLUMNAS — flex independiente por columna.
+         Sin CSS grid: elimina el bug de Android Chrome donde el grid
+         ignora el body de las cards de la columna izquierda.
          ================================================================= */
-      .menu-items-grid {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 12px;
+      .menu-items-cols {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
       }
-      @media (max-width: 340px) {
-        .menu-items-grid { grid-template-columns: 1fr; }
-      }
-      @media (min-width: 560px) {
-        .menu-items-grid { grid-template-columns: repeat(3, 1fr); }
+      .menu-items-col {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
       }
 
       /* Card: SIN overflow:hidden en el contenedor — ese es el bug que
@@ -1705,6 +1708,6 @@
       Cache-busting: bumpear el `?v=` cada vez que `app.js` cambia para
       forzar a Caddy y al browser a soltar el caché viejo.
     -->
-    <script src="./app.js?v=20260621-3"></script>
+    <script src="./app.js?v=20260621-4"></script>
   </body>
 </html>
