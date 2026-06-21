@@ -329,8 +329,12 @@
           0 6px 16px rgba(0, 0, 0, 0.35);
         transform-origin: left center;
         transform-style: preserve-3d;
-        /* Solo declaramos will-change para transform y opacity —
-           ambos van por GPU. Box-shadow NO. */
+        /* will-change SOLO cuando la animación está activa —
+           tenerlo siempre en todas las páginas agota la VRAM
+           de dispositivos de gama baja causando artefactos */
+      }
+      .book-page.is-leaving-forward,
+      .book-page.is-entering-backward-flip {
         will-change: transform, opacity;
       }
 
@@ -1566,6 +1570,32 @@
         .cover-pretitle { font-size: 26px; }
         #book-pages {
           height: calc(100vh - 180px);
+          /* Sin preserve-3d en mobile: evita capas GPU 3D innecesarias */
+          transform-style: flat !important;
+        }
+        /* En mobile reemplazar flip 3D por fade simple:
+           elimina translateZ/rotateY que causan artefactos de color
+           en GPUs de gama baja */
+        .book-page {
+          transform-style: flat !important;
+          will-change: auto !important;
+        }
+        .book-page.is-leaving-forward,
+        .book-page.is-entering-backward-flip {
+          animation: mobileFade 220ms ease forwards !important;
+          will-change: opacity !important;
+        }
+        @keyframes mobileFade {
+          from { opacity: 1; }
+          to   { opacity: 0; }
+        }
+        .book-page.is-entering-forward,
+        .book-page.is-entering-backward {
+          animation: mobileFadeIn 220ms ease forwards !important;
+        }
+        @keyframes mobileFadeIn {
+          from { opacity: 0; }
+          to   { opacity: 1; }
         }
       }
 
@@ -1739,6 +1769,6 @@
       Cache-busting: bumpear el `?v=` cada vez que `app.js` cambia para
       forzar a Caddy y al browser a soltar el caché viejo.
     -->
-    <script src="./app.js?v=20260621-15"></script>
+    <script src="./app.js?v=20260621-16"></script>
   </body>
 </html>

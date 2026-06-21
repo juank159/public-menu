@@ -3,6 +3,13 @@
  * Public Menu — frontend de la carta digital
  * =================================================================
  *
+ * Optimización de imágenes Cloudinary:
+ *   Las URLs originales traen imágenes full-size (ej: 1536x1024 PNG).
+ *   En gama baja esto agota la VRAM causando artefactos visuales.
+ *   Se pide versión reducida: 400px ancho, calidad automática, formato
+ *   automático (WebP en Chrome, AVIF donde se soporte).
+ */
+ *
  * SPA vanilla JS (sin framework) para máxima velocidad en celulares
  * lentos / 3G. Toda la app vive en `index.html` + este archivo.
  *
@@ -752,7 +759,7 @@
       ${
         hasImage
           ? `<div class="menu-item-thumb">
-               <img src="${escapeAttr(product.image_url)}" alt="" loading="lazy" />
+               <img src="${escapeAttr(cdnImg(product.image_url))}" alt="" loading="lazy" />
              </div>`
           : `<div class="menu-item-thumb" style="background:var(--paper-cream-deep)">
                <div class="menu-item-thumb-placeholder">
@@ -1140,6 +1147,13 @@
 
   function escapeAttr(s) {
     return escapeHtml(s);
+  }
+
+  // Pide imagen comprimida a Cloudinary: 400px ancho, calidad auto,
+  // formato auto (WebP/AVIF). Reduce un PNG de 1.5MB a ~30-60KB.
+  function cdnImg(url) {
+    if (!url || !url.includes('res.cloudinary.com')) return url;
+    return url.replace('/upload/', '/upload/w_400,q_auto,f_auto/');
   }
 
   // ---------------------------------------------------------------
