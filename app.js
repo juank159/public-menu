@@ -758,30 +758,48 @@
           ? `<div class="menu-item-thumb">
                <img src="${escapeAttr(product.image_url)}" alt="" loading="lazy" />
              </div>`
-          : `<div class="menu-item-thumb-placeholder">
-               <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round">
-                 <path d="M3 6h18M3 12h18M3 18h18" />
-               </svg>
+          : `<div class="menu-item-thumb" style="background:var(--paper-cream-deep)">
+               <div class="menu-item-thumb-placeholder">
+                 <svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round">
+                   <rect x="3" y="3" width="18" height="18" rx="2"/>
+                   <circle cx="8.5" cy="8.5" r="1.5"/>
+                   <polyline points="21 15 16 10 5 21"/>
+                 </svg>
+               </div>
              </div>`
       }
       <div class="menu-item-body">
         ${badgeText ? `<span class="menu-item-badge">${escapeHtml(badgeText)}</span>` : ''}
         <span class="menu-item-name">${escapeHtml(product.name)}</span>
-        ${
-          product.description
-            ? `<p class="menu-item-desc">${escapeHtml(product.description)}</p>`
-            : ''
-        }
+        ${product.description ? `<p class="menu-item-desc">${escapeHtml(product.description)}</p>` : ''}
         <div class="menu-item-line">
           <span class="menu-item-price">${priceHtml}</span>
           <button class="menu-item-add btn-press" type="button" aria-label="Agregar ${escapeAttr(product.name)}">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-              <path d="M12 5v14M5 12h14" />
+              <path d="M12 5v14M5 12h14"/>
             </svg>
           </button>
         </div>
       </div>
     `;
+
+    // Onerror: si la imagen falla (URL rota, 404), ocultar el <img>
+    // roto y mostrar el SVG placeholder en su lugar.
+    if (hasImage) {
+      const img = card.querySelector('.menu-item-thumb img');
+      if (img) {
+        img.onerror = function () {
+          const thumb = this.closest('.menu-item-thumb');
+          if (thumb) {
+            this.style.display = 'none';
+            const ph = document.createElement('div');
+            ph.className = 'menu-item-thumb-placeholder';
+            ph.innerHTML = '<svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+            thumb.appendChild(ph);
+          }
+        };
+      }
+    }
 
     // El "+" agrega sin abrir el modal cuando el plato no tiene variantes;
     // si tiene, abrimos el modal para que el cliente elija cuál. En ambos
