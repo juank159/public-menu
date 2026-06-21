@@ -290,17 +290,11 @@
       section.className = 'scroll-mt-16';
       section.innerHTML = `
         <h2 class="text-lg font-bold text-slate-800 mb-3">${escapeHtml(cat.name)}</h2>
-        <div class="menu-items-cols">
-          <div class="menu-items-col" id="prods-left-${cat.id}"></div>
-          <div class="menu-items-col" id="prods-right-${cat.id}"></div>
-        </div>
+        <div class="menu-items-grid" id="prods-${cat.id}"></div>
       `;
       root.appendChild(section);
-      const lCol = section.querySelector(`#prods-left-${cat.id}`);
-      const rCol = section.querySelector(`#prods-right-${cat.id}`);
-      cat.products.forEach((p, i) => {
-        (i % 2 === 0 ? lCol : rCol).appendChild(buildProductCard(p));
-      });
+      const container = section.querySelector(`#prods-${cat.id}`);
+      cat.products.forEach((p) => container.appendChild(buildProductCard(p)));
     });
   }
 
@@ -486,17 +480,11 @@
           <path d="M7 1.5v3M7 9.5v3M1.5 7h3M9.5 7h3" />
         </svg>
       </div>
-      <div class="menu-items-cols">
-        <div class="menu-items-col" id="prods-left-${cat.id}"></div>
-        <div class="menu-items-col" id="prods-right-${cat.id}"></div>
-      </div>
+      <div class="menu-items-grid" id="prods-${cat.id}"></div>
     `;
 
-    const leftCol  = inner.querySelector(`#prods-left-${cat.id}`);
-    const rightCol = inner.querySelector(`#prods-right-${cat.id}`);
-    cat.products.forEach((p, i) => {
-      (i % 2 === 0 ? leftCol : rightCol).appendChild(buildProductCard(p));
-    });
+    const container = inner.querySelector(`#prods-${cat.id}`);
+    cat.products.forEach((p) => container.appendChild(buildProductCard(p)));
     return page;
   }
 
