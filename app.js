@@ -62,6 +62,11 @@
     // doble animación mientras una está corriendo.
     bookIndex: 0,
     bookAnimating: false,
+    // Cuenta activa: cuando el cliente ya tiene una tab abierta y elige
+    // "Agregar más cosas". Se persistía en localStorage al enviar el
+    // pedido anterior; la nueva orden se adjunta a la misma tab.
+    activeTabSessionId: null,
+    activeCustomerName: null,
   };
 
   // ---------------------------------------------------------------
@@ -126,6 +131,53 @@
     try {
       localStorage.removeItem(`cart:${state.code}`);
     } catch (_) {}
+  }
+
+  // ── Sesión activa (cuenta abierta del cliente) ────────────────────
+  // Guardamos info suficiente para que el cliente que vuelve a escanear
+  // el QR pueda adjuntar su nuevo pedido a la misma tab, sin reabrir
+  // una cuenta nueva. TTL: 8 horas (razonable para una jornada).
+  const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+
+  function persistActiveSession(tabSessionId, orderNumber, customerName) {
+    if (!state.code || !tabSessionId) return;
+    try {
+      localStorage.setItem(
+        `session:${state.code}`,
+        JSON.stringify({
+          tabSessionId,
+          lastOrderNumber: orderNumber,
+          customerName: customerName || '',
+          savedAt: Date.now(),
+        }),
+      );
+    } catch (_) {}
+  }
+
+  function loadActiveSession() {
+    if (!state.code) return null;
+    try {
+      const raw = localStorage.getItem(`session:${state.code}`);
+      if (!raw) return null;
+      const s = JSON.parse(raw);
+      if (!s || !s.tabSessionId) return null;
+      if (Date.now() - (s.savedAt || 0) > SESSION_TTL_MS) {
+        localStorage.removeItem(`session:${state.code}`);
+        return null;
+      }
+      return s;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function clearActiveSession() {
+    if (!state.code) return;
+    try {
+      localStorage.removeItem(`session:${state.code}`);
+    } catch (_) {}
+    state.activeTabSessionId = null;
+    state.activeCustomerName = null;
   }
 
   /**
@@ -1070,6 +1122,7 @@
         type="text"
         maxlength="100"
         placeholder="Ej: Juan Pérez"
+        value="${escapeAttr(state.activeCustomerName || '')}"
       />
 
       <label class="cart-field-label">Teléfono <span class="opt">(opcional)</span></label>
@@ -1625,6 +1678,8 @@
           customer_name: name,
           customer_phone: phone || undefined,
           notes: notes || undefined,
+          // Si el cliente tiene una cuenta activa, adjuntamos su pedido.
+          tab_session_id: state.activeTabSessionId || undefined,
           items: state.cart.map((it) => ({
             product_id: it.product_id,
             variant_id: it.variant_id || undefined,
@@ -1644,6 +1699,14 @@
         const orderNumber =
           (result && (result.order_number || result.data?.order_number)) ||
           '';
+        const newTabSessionId =
+          (result && (result.tab_session_id || result.data?.tab_session_id)) ||
+          state.activeTabSessionId ||
+          null;
+
+        // Persistir sesión activa para que si vuelve a escanear el QR
+        // pueda agregar más cosas a la misma cuenta.
+        persistActiveSession(newTabSessionId, orderNumber, name);
 
         // Arrancamos tracking inmediatamente — el usuario ve la
         // pantalla de tracking con estado live + auto-refresh cada 15s
@@ -1663,9 +1726,6 @@
     },
 
     startOver() {
-      // Detenemos tracking + limpiamos session storage para que el QR
-      // vuelva a abrir la carta limpia. El localStorage del cart ya
-      // se limpió al enviar.
       stopTracking();
       try {
         sessionStorage.removeItem(`tracking:${state.code}`);
@@ -1673,10 +1733,115 @@
       state.trackedOrderNumber = null;
       window.location.reload();
     },
+
+    // Limpia la cuenta activa y vuelve al menú (para "Nueva cuenta").
+    resetSession() {
+      clearActiveSession();
+      const banner = $('session-banner');
+      if (banner) banner.classList.add('hidden');
+      // El estado del menú ya está listo; solo ocultamos el banner.
+    },
+
+    // Activa el modo "agregar a cuenta existente" y cierra el banner.
+    resumeSession(tabSessionId, customerName) {
+      state.activeTabSessionId = tabSessionId;
+      state.activeCustomerName = customerName;
+      const banner = $('session-banner');
+      if (banner) banner.classList.add('hidden');
+      App.toast(`Perfecto, ${customerName || 'hola'}! Agregá lo que querás a tu cuenta.`);
+    },
+
+    // Navega a la pantalla de tracking del último pedido de la sesión.
+    trackLastOrder(orderNumber) {
+      const banner = $('session-banner');
+      if (banner) banner.classList.add('hidden');
+      showScreen('screen-tracking');
+      startTracking(orderNumber);
+    },
   };
 
   // Exponer App globalmente (para los onclick="App.xxx()" del HTML).
   window.App = App;
+
+  // ---------------------------------------------------------------
+  // Banner: cliente recurrente con cuenta activa
+  // ---------------------------------------------------------------
+  /**
+   * Muestra un banner fijo en la parte inferior cuando el cliente
+   * vuelve a escanear el QR y tiene una cuenta abierta reciente.
+   *
+   * Tres opciones:
+   *   • Agregar → entra en modo "adjuntar a cuenta" (menu normal pero
+   *     el submitOrder incluye tab_session_id).
+   *   • Ver pedido → va directo a tracking del último pedido.
+   *   • Nueva cuenta → borra la sesión y abre una tab nueva.
+   */
+  // Sesión previa cacheada para que los botones del banner la lean
+  // sin inlinear strings arbitrarios en event handlers.
+  let _bannerSession = null;
+
+  function showSessionBanner(session) {
+    _bannerSession = session;
+
+    let banner = $('session-banner');
+    if (!banner) {
+      banner = document.createElement('div');
+      banner.id = 'session-banner';
+      banner.style.cssText = [
+        'position:fixed', 'bottom:0', 'left:0', 'right:0', 'z-index:900',
+        'background:#1e293b', 'color:#f8fafc',
+        'padding:14px 16px 20px', 'border-top:2px solid #f59e0b',
+        'display:flex', 'flex-direction:column', 'gap:10px',
+        'box-shadow:0 -4px 24px rgba(0,0,0,.4)',
+        'font-family:inherit',
+      ].join(';');
+      document.body.appendChild(banner);
+    }
+
+    const nameText = session.customerName
+      ? `Hola, <strong>${escapeHtml(session.customerName)}</strong>!`
+      : 'Hola!';
+    const orderRef = session.lastOrderNumber
+      ? `Tu último pedido: <strong>${escapeHtml(session.lastOrderNumber)}</strong>.`
+      : '';
+
+    banner.innerHTML = `
+      <p style="margin:0;font-size:15px;line-height:1.4">
+        ${nameText} Tenés una cuenta abierta. ${orderRef}
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button id="sb-resume"
+          style="flex:1;min-width:120px;padding:10px 12px;border:none;border-radius:8px;
+                 background:#f59e0b;color:#1e293b;font-weight:700;font-size:14px;cursor:pointer">
+          Agregar más cosas
+        </button>
+        ${session.lastOrderNumber ? `
+        <button id="sb-track"
+          style="flex:1;min-width:100px;padding:10px 12px;border:1px solid #94a3b8;border-radius:8px;
+                 background:transparent;color:#f8fafc;font-size:14px;cursor:pointer">
+          Ver mi pedido
+        </button>` : ''}
+        <button id="sb-reset"
+          style="padding:10px 12px;border:none;border-radius:8px;
+                 background:#334155;color:#94a3b8;font-size:13px;cursor:pointer">
+          Nueva cuenta
+        </button>
+      </div>
+    `;
+    banner.classList.remove('hidden');
+
+    // Vincular eventos desde JS (evita inlinear strings con comillas).
+    const sbResume = document.getElementById('sb-resume');
+    if (sbResume) sbResume.onclick = () =>
+      App.resumeSession(session.tabSessionId, session.customerName || '');
+
+    const sbTrack = document.getElementById('sb-track');
+    if (sbTrack) sbTrack.onclick = () =>
+      App.trackLastOrder(session.lastOrderNumber);
+
+    const sbReset = document.getElementById('sb-reset');
+    if (sbReset) sbReset.onclick = () => App.resetSession();
+  }
 
   // ---------------------------------------------------------------
   // Boot
@@ -1745,6 +1910,14 @@
       renderCartFab();
 
       showScreen('screen-menu');
+
+      // ── Bienvenida a cliente recurrente ─────────────────────────
+      // Verificar si tiene una cuenta activa (pedido previo < 8h).
+      // Mostramos un banner no bloqueante para que pueda elegir.
+      const prevSession = loadActiveSession();
+      if (prevSession && prevSession.tabSessionId) {
+        showSessionBanner(prevSession);
+      }
     } catch (err) {
       if (err.status === 404) {
         showError('Este QR no es válido. Pedile al mozo el QR nuevo.');
