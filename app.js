@@ -26,7 +26,7 @@
  */
 
 (function () {
-  'use strict';
+  "use strict";
 
   // ---------------------------------------------------------------
   // Config
@@ -34,12 +34,12 @@
   const API_BASE = (() => {
     const meta = document.querySelector('meta[name="api-base"]');
     const raw = (meta && meta.content) || window.location.origin;
-    return raw.replace(/\/+$/, '');
+    return raw.replace(/\/+$/, "");
   })();
 
-  const CURRENCY_FORMATTER = new Intl.NumberFormat('es-CO', {
-    style: 'currency',
-    currency: 'COP',
+  const CURRENCY_FORMATTER = new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
     maximumFractionDigits: 0,
   });
 
@@ -82,12 +82,12 @@
    */
   function extractCode() {
     const params = new URLSearchParams(window.location.search);
-    const fromQuery = params.get('c') || params.get('code');
+    const fromQuery = params.get("c") || params.get("code");
     if (fromQuery) return fromQuery.trim();
 
-    const path = window.location.pathname.replace(/^\/+|\/+$/g, '');
+    const path = window.location.pathname.replace(/^\/+|\/+$/g, "");
     if (!path) return null;
-    const parts = path.split('/');
+    const parts = path.split("/");
     const last = parts[parts.length - 1];
     // /m/CODE  → last = CODE; /CODE → mismo.
     // El backend valida formato (8-32 chars alfanum + _ -), acá no
@@ -96,15 +96,18 @@
   }
 
   function showScreen(id) {
-    ['screen-loading', 'screen-error', 'screen-menu', 'screen-tracking'].forEach(
-      (s) => $(s).classList.add('hidden'),
-    );
-    $(id).classList.remove('hidden');
+    [
+      "screen-loading",
+      "screen-error",
+      "screen-menu",
+      "screen-tracking",
+    ].forEach((s) => $(s).classList.add("hidden"));
+    $(id).classList.remove("hidden");
   }
 
   function showError(message) {
-    $('error-message').textContent = message;
-    showScreen('screen-error');
+    $("error-message").textContent = message;
+    showScreen("screen-error");
   }
 
   function persistCart() {
@@ -136,8 +139,27 @@
   // ── Sesión activa (cuenta abierta del cliente) ────────────────────
   // Guardamos info suficiente para que el cliente que vuelve a escanear
   // el QR pueda adjuntar su nuevo pedido a la misma tab, sin reabrir
-  // una cuenta nueva. TTL: 8 horas (razonable para una jornada).
-  const SESSION_TTL_MS = 8 * 60 * 60 * 1000;
+  // una cuenta nueva.
+  //
+  // TTL: 5 horas. Es tiempo suficiente para la jornada de un comensal
+  // (almuerzo prolongado, cena) sin el riesgo de que quien llegue al
+  // día siguiente herede la sesión de ayer.
+  //
+  // Adicionalmente, validamos que la sesión guardada sea del DÍA DE HOY
+  // en Colombia (UTC-5). Aunque el TTL cubra la mayoría de los casos,
+  // si el navegador durmió cerca de medianoche, el timestamp local
+  // puede ser "ayer" aunque no hayan pasado 5 horas.
+  const SESSION_TTL_MS = 5 * 60 * 60 * 1000;
+
+  /** Fecha de HOY en Colombia como 'YYYY-MM-DD' (no depende de TZ del navegador). */
+  function todayInColombia() {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Bogota",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  }
 
   function persistActiveSession(tabSessionId, orderNumber, customerName) {
     if (!state.code || !tabSessionId) return;
@@ -147,8 +169,9 @@
         JSON.stringify({
           tabSessionId,
           lastOrderNumber: orderNumber,
-          customerName: customerName || '',
+          customerName: customerName || "",
           savedAt: Date.now(),
+          savedDate: todayInColombia(), // fecha Colombia en el momento de guardar
         }),
       );
     } catch (_) {}
@@ -161,7 +184,13 @@
       if (!raw) return null;
       const s = JSON.parse(raw);
       if (!s || !s.tabSessionId) return null;
+      // Expirado por tiempo (5h)
       if (Date.now() - (s.savedAt || 0) > SESSION_TTL_MS) {
+        localStorage.removeItem(`session:${state.code}`);
+        return null;
+      }
+      // Expirado por cambio de día en Colombia — el cliente vuelve al día siguiente
+      if (s.savedDate && s.savedDate !== todayInColombia()) {
         localStorage.removeItem(`session:${state.code}`);
         return null;
       }
@@ -188,12 +217,12 @@
   function addLine(line) {
     // Distinta combinación de cremas = línea separada (clave para que el
     // backend reciba los flavor_ids correctos por línea).
-    const flavorKey = (l) => (l.flavor_ids || []).join(',');
+    const flavorKey = (l) => (l.flavor_ids || []).join(",");
     const existingIdx = state.cart.findIndex(
       (it) =>
         it.product_id === line.product_id &&
-        (it.variant_id || '') === (line.variant_id || '') &&
-        (it.special_instructions || '') === (line.special_instructions || '') &&
+        (it.variant_id || "") === (line.variant_id || "") &&
+        (it.special_instructions || "") === (line.special_instructions || "") &&
         flavorKey(it) === flavorKey(line),
     );
     if (existingIdx >= 0) {
@@ -208,8 +237,8 @@
   // ---------------------------------------------------------------
   async function fetchMenu(code) {
     const res = await fetch(`${API_BASE}/api/v1/public/menu/${code}`, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
+      method: "GET",
+      headers: { Accept: "application/json" },
     });
     if (!res.ok) {
       let detail = `HTTP ${res.status}`;
@@ -226,10 +255,10 @@
 
   async function submitOrder(payload) {
     const res = await fetch(`${API_BASE}/api/v1/public/orders`, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
+        "Content-Type": "application/json",
+        Accept: "application/json",
       },
       body: JSON.stringify(payload),
     });
@@ -248,8 +277,8 @@
       `?code=${encodeURIComponent(code)}` +
       `&order=${encodeURIComponent(orderNumber)}`;
     const res = await fetch(url, {
-      method: 'GET',
-      headers: { Accept: 'application/json' },
+      method: "GET",
+      headers: { Accept: "application/json" },
     });
     if (!res.ok) {
       let detail = `HTTP ${res.status}`;
@@ -269,48 +298,59 @@
   // Render — Menú
   // ---------------------------------------------------------------
   function renderHeader() {
-    const label = state.destination?.label || 'Carta digital';
-    // El backend no expone tenant.name en /public/menu (deliberado:
-    // menos info filtrada sin auth). Si querés ese branding, agregar
-    // al response del backend y leerlo acá.
-    $('tenant-name').textContent =
-      state.destination?.type === 'table' ? 'Mesa' :
-      state.destination?.type === 'zone' ? 'Zona' :
-      state.destination?.type === 'pickup' ? 'Mostrador' : 'Carta';
-    $('qr-label').textContent = label;
+    const label = state.destination?.label || "Carta digital";
+    $("tenant-name").textContent =
+      state.destination?.type === "table"
+        ? "Mesa"
+        : state.destination?.type === "zone"
+          ? "Zona"
+          : state.destination?.type === "pickup"
+            ? "Mostrador"
+            : "Carta";
+    $("qr-label").textContent = label;
     document.title = `${label} — Carta`;
+
+    // Mostrar botones de acción y configurar link del PDF
+    const actionsBar = $("menu-header-actions");
+    if (actionsBar) actionsBar.classList.remove("hidden");
+
+    const pdfLink = $("pdf-download-link");
+    if (pdfLink && state.code) {
+      pdfLink.href = `${API_BASE}/api/v1/public/menu/${encodeURIComponent(state.code)}/pdf`;
+    }
   }
 
   function renderTabs() {
-    const nav = $('categories-tabs');
+    const nav = $("categories-tabs");
     if (!nav) return;
-    nav.innerHTML = '';
+    nav.innerHTML = "";
     const mode = getBookMode();
     state.categories.forEach((cat, catIdx) => {
-      const btn = document.createElement('button');
+      const btn = document.createElement("button");
       // bookIndex 0 = portada; las categorías empiezan en bookIndex 1.
       // La categoría con catIdx N está en bookIndex N+1.
       const pageIdx = catIdx + 1;
       const isActive = pageIdx === state.bookIndex;
-      btn.className = `menu-tab btn-press ${isActive ? 'is-active' : ''}`;
+      btn.className = `menu-tab btn-press ${isActive ? "is-active" : ""}`;
       btn.textContent = cat.name;
       btn.onclick = () => {
-        if (mode === 'book') {
+        if (mode === "book") {
           goToPage(pageIdx);
         } else {
           state.bookIndex = pageIdx;
           state.activeCategoryId = cat.id;
           renderTabs();
           const target = document.getElementById(`cat-${cat.id}`);
-          if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          if (target)
+            target.scrollIntoView({ behavior: "smooth", block: "start" });
         }
       };
       if (isActive) {
         requestAnimationFrame(() => {
           btn.scrollIntoView({
-            behavior: 'smooth',
-            inline: 'center',
-            block: 'nearest',
+            behavior: "smooth",
+            inline: "center",
+            block: "nearest",
           });
         });
       }
@@ -324,11 +364,11 @@
   /// Solo se activa si el HTML servido NO trae el contenedor de libro
   /// — caso "navegador con HTML cacheado pre-libro pero JS nuevo".
   function renderCategoriesLegacy() {
-    const root = $('categories-content');
+    const root = $("categories-content");
     if (!root) return;
-    root.innerHTML = '';
+    root.innerHTML = "";
     if (state.categories.length === 0) {
-      const msg = state.emptyReason || 'Pedile al mozo más info.';
+      const msg = state.emptyReason || "Pedile más info.";
       root.innerHTML = `
         <div class="text-center text-slate-500 py-12">
           <p class="font-medium">No hay productos disponibles hoy.</p>
@@ -337,9 +377,9 @@
       return;
     }
     state.categories.forEach((cat) => {
-      const section = document.createElement('section');
+      const section = document.createElement("section");
       section.id = `cat-${cat.id}`;
-      section.className = 'scroll-mt-16';
+      section.className = "scroll-mt-16";
       section.innerHTML = `
         <h2 class="text-lg font-bold text-slate-800 mb-3">${escapeHtml(cat.name)}</h2>
         <div class="menu-items-grid" id="prods-${cat.id}"></div>
@@ -361,8 +401,8 @@
   /// la nueva (libro) usa `book-pages`. Si el browser todavía sirve
   /// HTML cacheado, podríamos terminar con cualquiera de los dos.
   function getBookMode() {
-    if ($('book-pages')) return 'book';
-    if ($('categories-content')) return 'legacy';
+    if ($("book-pages")) return "book";
+    if ($("categories-content")) return "legacy";
     return null;
   }
 
@@ -374,18 +414,20 @@
 
   function renderCategories() {
     const mode = getBookMode();
-    if (mode === 'legacy') return renderCategoriesLegacy();
-    if (mode !== 'book') {
-      console.error('[public-menu] No encontramos contenedor de categorías. ¿HTML desactualizado?');
+    if (mode === "legacy") return renderCategoriesLegacy();
+    if (mode !== "book") {
+      console.error(
+        "[public-menu] No encontramos contenedor de categorías. ¿HTML desactualizado?",
+      );
       return;
     }
-    const root = $('book-pages');
-    root.innerHTML = '';
+    const root = $("book-pages");
+    root.innerHTML = "";
 
     if (state.categories.length === 0) {
-      const msg = state.emptyReason || 'Pedile al mozo más info.';
-      const empty = document.createElement('div');
-      empty.className = 'book-page is-active';
+      const msg = state.emptyReason || "Pedile más info.";
+      const empty = document.createElement("div");
+      empty.className = "book-page is-active";
       empty.innerHTML = `
         <div class="book-page-back"></div>
         <div class="book-page-inner">
@@ -405,17 +447,17 @@
     if (state.bookIndex < 0) state.bookIndex = 0;
 
     const cover = buildCoverPage();
-    if (state.bookIndex === 0) cover.classList.add('is-active');
-    else cover.classList.add('is-hidden');
+    if (state.bookIndex === 0) cover.classList.add("is-active");
+    else cover.classList.add("is-hidden");
     root.appendChild(cover);
 
     state.categories.forEach((cat, catIdx) => {
       const pageIdx = catIdx + 1; // 0 reservado para portada
       const page = buildCategoryPage(cat, pageIdx);
       if (pageIdx === state.bookIndex) {
-        page.classList.add('is-active');
+        page.classList.add("is-active");
       } else {
-        page.classList.add('is-hidden');
+        page.classList.add("is-hidden");
       }
       root.appendChild(page);
     });
@@ -429,8 +471,27 @@
   /// — si hubiera más cae al arábigo.
   function toRoman(n) {
     const romans = [
-      '', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X',
-      'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'XVII', 'XVIII', 'XIX', 'XX',
+      "",
+      "I",
+      "II",
+      "III",
+      "IV",
+      "V",
+      "VI",
+      "VII",
+      "VIII",
+      "IX",
+      "X",
+      "XI",
+      "XII",
+      "XIII",
+      "XIV",
+      "XV",
+      "XVI",
+      "XVII",
+      "XVIII",
+      "XIX",
+      "XX",
     ];
     return romans[n] || String(n);
   }
@@ -439,29 +500,29 @@
   /// inner, sombra proyectada, número de página). El contenido específico
   /// lo monta el caller dentro de `inner`.
   function buildPageShell(idx, total) {
-    const page = document.createElement('article');
-    page.className = 'book-page';
+    const page = document.createElement("article");
+    page.className = "book-page";
 
-    const back = document.createElement('div');
-    back.className = 'book-page-back';
+    const back = document.createElement("div");
+    back.className = "book-page-back";
     page.appendChild(back);
 
-    const inner = document.createElement('div');
-    inner.className = 'book-page-inner';
+    const inner = document.createElement("div");
+    inner.className = "book-page-inner";
     page.appendChild(inner);
 
     // Sombra de proyección durante el flip — vive como hijo para que
     // podamos animar su opacity/transform en GPU. Evita animar
     // box-shadow (que va por CPU y come frames).
-    const shadow = document.createElement('div');
-    shadow.className = 'book-page-shadow';
+    const shadow = document.createElement("div");
+    shadow.className = "book-page-shadow";
     page.appendChild(shadow);
 
     // Número de página al pie en romano (sin "Capítulo X" — esa
     // etiqueta era demasiado pretenciosa para una carta normal).
     if (idx > 0) {
-      const pageno = document.createElement('div');
-      pageno.className = 'book-pageno';
+      const pageno = document.createElement("div");
+      pageno.className = "book-pageno";
       pageno.textContent = `~ ${toRoman(idx)} ~`;
       page.appendChild(pageno);
     }
@@ -474,7 +535,7 @@
   /// libro físico (siempre lo abrís por la tapa, no en el medio).
   function buildCoverPage() {
     const { page, inner } = buildPageShell(0, 0);
-    page.dataset.isCover = '1';
+    page.dataset.isCover = "1";
     inner.innerHTML = `
       <div class="cover">
         <div class="cover-ornament-top">
@@ -503,10 +564,10 @@
 
     // Inyectar tenant + destino del QR (ya tenemos esos datos en state).
     requestAnimationFrame(() => {
-      const tEl = inner.querySelector('#cover-tenant');
-      const dEl = inner.querySelector('#cover-destination');
-      if (tEl) tEl.textContent = state.destination?.label ? 'Bienvenido a' : '';
-      if (dEl) dEl.textContent = state.destination?.label || '';
+      const tEl = inner.querySelector("#cover-tenant");
+      const dEl = inner.querySelector("#cover-destination");
+      if (tEl) tEl.textContent = state.destination?.label ? "Bienvenido a" : "";
+      if (dEl) dEl.textContent = state.destination?.label || "";
     });
 
     return page;
@@ -547,8 +608,8 @@
   }
 
   function updateNavButtons() {
-    const prev = $('book-prev');
-    const next = $('book-next');
+    const prev = $("book-prev");
+    const next = $("book-next");
     if (!prev || !next) return;
     const last = totalPages() - 1;
     prev.disabled = state.bookIndex <= 0;
@@ -571,9 +632,9 @@
     if (targetIdx === state.bookIndex) return;
     if (targetIdx < 0 || targetIdx >= totalPages()) return;
 
-    const root = $('book-pages');
+    const root = $("book-pages");
     if (!root) return;
-    const pages = root.querySelectorAll('.book-page');
+    const pages = root.querySelectorAll(".book-page");
     const current = pages[state.bookIndex];
     const target = pages[targetIdx];
     if (!current || !target) return;
@@ -582,31 +643,32 @@
     state.bookAnimating = true;
 
     // Reduce motion: crossfade sin flip 3D para respetar accesibilidad.
-    const reduceMotion = window.matchMedia &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const reduceMotion =
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     if (forward) {
       // FORWARD: target queda como preview debajo, current sale girando.
-      target.classList.remove('is-hidden');
-      target.classList.remove('is-active');
-      target.classList.add('is-next-preview');
+      target.classList.remove("is-hidden");
+      target.classList.remove("is-active");
+      target.classList.add("is-next-preview");
 
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          current.classList.remove('is-active');
-          current.classList.add('is-leaving-forward');
+          current.classList.remove("is-active");
+          current.classList.add("is-leaving-forward");
         });
       });
 
       const onEnd = () => {
-        current.removeEventListener('animationend', onEnd);
-        current.classList.remove('is-leaving-forward');
-        current.classList.add('is-hidden');
-        target.classList.remove('is-next-preview');
-        target.classList.add('is-active');
+        current.removeEventListener("animationend", onEnd);
+        current.classList.remove("is-leaving-forward");
+        current.classList.add("is-hidden");
+        target.classList.remove("is-next-preview");
+        target.classList.add("is-active");
         finalize(targetIdx);
       };
-      current.addEventListener('animationend', onEnd);
+      current.addEventListener("animationend", onEnd);
       if (reduceMotion) {
         // En reduce-motion la animación dura 240ms; forzamos finalize
         // por timeout por si animationend no dispara.
@@ -616,25 +678,25 @@
       // BACKWARD: current queda como preview debajo, target ENTRA
       // volteándose hacia abajo (de -180° a 0°). Sensación de "la hoja
       // anterior cae sobre la actual".
-      current.classList.remove('is-active');
-      current.classList.add('is-next-preview');
+      current.classList.remove("is-active");
+      current.classList.add("is-next-preview");
 
-      target.classList.remove('is-hidden');
+      target.classList.remove("is-hidden");
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          target.classList.add('is-entering-backward-flip');
+          target.classList.add("is-entering-backward-flip");
         });
       });
 
       const onEnd = () => {
-        target.removeEventListener('animationend', onEnd);
-        target.classList.remove('is-entering-backward-flip');
-        target.classList.add('is-active');
-        current.classList.remove('is-next-preview');
-        current.classList.add('is-hidden');
+        target.removeEventListener("animationend", onEnd);
+        target.classList.remove("is-entering-backward-flip");
+        target.classList.add("is-active");
+        current.classList.remove("is-next-preview");
+        current.classList.add("is-hidden");
         finalize(targetIdx);
       };
-      target.addEventListener('animationend', onEnd);
+      target.addEventListener("animationend", onEnd);
       if (reduceMotion) {
         setTimeout(() => onEnd(), 260);
       }
@@ -652,7 +714,7 @@
       state.bookAnimating = false;
       renderTabs();
       updateNavButtons();
-      const inner = pages[idx].querySelector('.book-page-inner');
+      const inner = pages[idx].querySelector(".book-page-inner");
       if (inner) inner.scrollTop = 0;
     }
   }
@@ -692,14 +754,14 @@
       const dy = y - startY;
       if (!lockedDirection) {
         if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-          lockedDirection = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+          lockedDirection = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
         }
       }
     }
     function end(x) {
       if (!active) return;
       active = false;
-      if (lockedDirection !== 'x') return;
+      if (lockedDirection !== "x") return;
       const dx = x - startX;
       const stageW = root.getBoundingClientRect().width || 320;
       const threshold = Math.min(60, stageW * 0.25);
@@ -709,33 +771,45 @@
     }
 
     // Touch
-    root.addEventListener('touchstart', (ev) => {
-      if (ev.touches.length !== 1) return;
-      start(ev.touches[0].clientX, ev.touches[0].clientY);
-    }, { passive: true });
-    root.addEventListener('touchmove', (ev) => {
-      if (ev.touches.length !== 1) return;
-      move(ev.touches[0].clientX, ev.touches[0].clientY);
-    }, { passive: true });
-    root.addEventListener('touchend', (ev) => {
-      end(ev.changedTouches[0].clientX);
-    }, { passive: true });
+    root.addEventListener(
+      "touchstart",
+      (ev) => {
+        if (ev.touches.length !== 1) return;
+        start(ev.touches[0].clientX, ev.touches[0].clientY);
+      },
+      { passive: true },
+    );
+    root.addEventListener(
+      "touchmove",
+      (ev) => {
+        if (ev.touches.length !== 1) return;
+        move(ev.touches[0].clientX, ev.touches[0].clientY);
+      },
+      { passive: true },
+    );
+    root.addEventListener(
+      "touchend",
+      (ev) => {
+        end(ev.changedTouches[0].clientX);
+      },
+      { passive: true },
+    );
 
     // Mouse (desktop drag horizontal). Solo activamos si el target
     // NO es un elemento interactivo (botón, link, input) — para no
     // chocar con clicks reales.
-    root.addEventListener('mousedown', (ev) => {
+    root.addEventListener("mousedown", (ev) => {
       if (ev.button !== 0) return; // sólo botón principal
-      const tag = (ev.target && ev.target.tagName) || '';
+      const tag = (ev.target && ev.target.tagName) || "";
       if (/^(BUTTON|A|INPUT|TEXTAREA|SELECT)$/.test(tag)) return;
-      if (ev.target.closest && ev.target.closest('.menu-item')) return;
+      if (ev.target.closest && ev.target.closest(".menu-item")) return;
       start(ev.clientX, ev.clientY);
     });
-    window.addEventListener('mousemove', (ev) => {
+    window.addEventListener("mousemove", (ev) => {
       if (!active) return;
       move(ev.clientX, ev.clientY);
     });
-    window.addEventListener('mouseup', (ev) => {
+    window.addEventListener("mouseup", (ev) => {
       end(ev.clientX);
     });
   }
@@ -773,8 +847,8 @@
     // Card "menu-item" estilo carta impresa: nombre en serifa, puntos
     // hasta el precio, descripción en cursiva. Sin border-radius / fondo
     // — el "paper" es la página del libro, así que cualquier card flota.
-    const card = document.createElement('div');
-    card.className = 'menu-item btn-press';
+    const card = document.createElement("div");
+    card.className = "menu-item btn-press";
     card.onclick = () => App.openProduct(product);
 
     const hasImage = !!product.image_url;
@@ -817,9 +891,9 @@
              </div>`
       }
       <div class="menu-item-body">
-        ${badgeText ? `<span class="menu-item-badge">${escapeHtml(badgeText)}</span>` : ''}
+        ${badgeText ? `<span class="menu-item-badge">${escapeHtml(badgeText)}</span>` : ""}
         <span class="menu-item-name">${escapeHtml(product.name)}</span>
-        ${product.description ? `<p class="menu-item-desc">${escapeHtml(product.description)}</p>` : ''}
+        ${product.description ? `<p class="menu-item-desc">${escapeHtml(product.description)}</p>` : ""}
         <div class="menu-item-line">
           <span class="menu-item-price">${priceHtml}</span>
           <button class="menu-item-add btn-press" type="button" aria-label="Agregar ${escapeAttr(product.name)}">
@@ -832,26 +906,29 @@
     `;
 
     if (hasImage) {
-      const img = card.querySelector('.menu-item-thumb img');
+      const img = card.querySelector(".menu-item-thumb img");
       if (img) {
         // Si la foto es muy vertical (ratio < 0.8 → botella, caja, etc.)
         // usamos contain para no recortarla; si es cuadrada/paisaje usamos
         // cover para que llene bien el espacio sin bordes vacíos.
         const applyFit = function (el) {
           if (el.naturalWidth / el.naturalHeight < 0.8) {
-            el.classList.add('img-portrait');
+            el.classList.add("img-portrait");
           }
         };
-        img.onload = function () { applyFit(this); };
+        img.onload = function () {
+          applyFit(this);
+        };
         // Imagen ya en caché: onload no dispara, revisar de inmediato
         if (img.complete && img.naturalWidth > 0) applyFit(img);
         img.onerror = function () {
-          const thumb = this.closest('.menu-item-thumb');
+          const thumb = this.closest(".menu-item-thumb");
           if (thumb) {
-            this.style.display = 'none';
-            const ph = document.createElement('div');
-            ph.className = 'menu-item-thumb-placeholder';
-            ph.innerHTML = '<svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
+            this.style.display = "none";
+            const ph = document.createElement("div");
+            ph.className = "menu-item-thumb-placeholder";
+            ph.innerHTML =
+              '<svg width="38" height="38" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>';
             thumb.appendChild(ph);
           }
         };
@@ -861,7 +938,7 @@
     // El "+" agrega sin abrir el modal cuando el plato no tiene variantes;
     // si tiene, abrimos el modal para que el cliente elija cuál. En ambos
     // casos `stopPropagation` evita que también dispare el onclick de la card.
-    const addBtn = card.querySelector('.menu-item-add');
+    const addBtn = card.querySelector(".menu-item-add");
     addBtn.onclick = (ev) => {
       ev.stopPropagation();
       if (hasVariants) {
@@ -881,29 +958,29 @@
   /// HTML del selector de cremas según la variante elegida. Una fila por
   /// bola (con repetidos permitidos). Vacío si la variante no pide cremas.
   function flavorSectionHtml() {
-    if (!modalProductState) return '';
+    if (!modalProductState) return "";
     const scoops = modalProductState.selectedFlavors.length;
-    if (scoops <= 0) return '';
+    if (scoops <= 0) return "";
     const flavors = modalProductState.categoryFlavors;
 
     if (flavors.length === 0) {
       return `
         <div class="pm-section-label">Cremas</div>
-        <p class="pm-flavor-empty">Todavía no hay cremas cargadas. Pedíselas al mozo.</p>`;
+        <p class="pm-flavor-empty">Todavía no hay cremas cargadas. Pedíselas.</p>`;
     }
 
     const slots = [];
     for (let i = 0; i < scoops; i++) {
-      const sel = modalProductState.selectedFlavors[i] || '';
+      const sel = modalProductState.selectedFlavors[i] || "";
       const options = [
         `<option value="">Elegí…</option>`,
         ...flavors.map(
           (f) =>
             `<option value="${escapeAttr(f.id)}" ${
-              sel === f.id ? 'selected' : ''
+              sel === f.id ? "selected" : ""
             }>${escapeHtml(f.name)}</option>`,
         ),
-      ].join('');
+      ].join("");
       slots.push(`
         <div class="pm-flavor-slot">
           <span class="pm-flavor-num">Bola ${i + 1}</span>
@@ -915,7 +992,7 @@
     }
     return `
       <div class="pm-section-label">Elegí tus cremas (${scoops})</div>
-      <div class="pm-flavors">${slots.join('')}</div>`;
+      <div class="pm-flavors">${slots.join("")}</div>`;
   }
 
   function renderProductModal(product) {
@@ -952,10 +1029,10 @@
       variants,
       selectedVariantIdx,
       quantity: 1,
-      special_instructions: '',
+      special_instructions: "",
       unit_price: unitPrice,
       categoryFlavors,
-      selectedFlavors: new Array(initialScoops).fill(''),
+      selectedFlavors: new Array(initialScoops).fill(""),
     };
 
     const variantsHtml = hasVariants
@@ -967,7 +1044,7 @@
               (v, i) => `
             <button
               type="button"
-              class="pm-variant btn-press ${i === selectedVariantIdx ? 'is-selected' : ''}"
+              class="pm-variant btn-press ${i === selectedVariantIdx ? "is-selected" : ""}"
               data-variant-idx="${i}"
               onclick="App.selectVariant(${i})"
             >
@@ -976,17 +1053,17 @@
               <span class="pm-variant-price">${fmt(v.price)}</span>
             </button>`,
             )
-            .join('')}
+            .join("")}
         </div>`
-      : '';
+      : "";
 
-    const root = $('product-detail');
+    const root = $("product-detail");
     root.innerHTML = `
       <div class="sheet-handle"></div>
       ${
         product.image_url
           ? `<img src="${escapeAttr(product.image_url)}" alt="" class="pm-img" />`
-          : ''
+          : ""
       }
       <div class="pm-head">
         <h2 class="pm-title">${escapeHtml(product.name)}</h2>
@@ -999,7 +1076,7 @@
       ${
         product.description
           ? `<p class="pm-desc">${escapeHtml(product.description)}</p>`
-          : ''
+          : ""
       }
       <div class="pm-price" id="prod-price">${fmt(unitPrice)}</div>
 
@@ -1031,14 +1108,14 @@
         <span id="prod-total" class="pm-add-total">${fmt(unitPrice)}</span>
       </button>
     `;
-    $('modal-product').classList.remove('hidden');
+    $("modal-product").classList.remove("hidden");
   }
 
   // ---------------------------------------------------------------
   // Render — Carrito (modal)
   // ---------------------------------------------------------------
   function renderCartModal() {
-    const root = $('cart-detail');
+    const root = $("cart-detail");
     const total = state.cart.reduce(
       (sum, item) => sum + item.unit_price * item.quantity,
       0,
@@ -1060,7 +1137,7 @@
         </div>
         <p class="cart-empty">Tu pedido está vacío.</p>
       `;
-      $('modal-cart').classList.remove('hidden');
+      $("modal-cart").classList.remove("hidden");
       return;
     }
 
@@ -1073,21 +1150,21 @@
             ${
               item.variant_name
                 ? `<p class="cart-row-sub">${escapeHtml(item.variant_name)}</p>`
-                : ''
+                : ""
             }
             ${
               item.flavor_names && item.flavor_names.length
                 ? `<p class="cart-row-sub">🍦 ${escapeHtml(
-                    item.flavor_names.join(', '),
+                    item.flavor_names.join(", "),
                   )}</p>`
-                : ''
+                : ""
             }
             ${
               item.special_instructions
                 ? `<p class="cart-row-sub">“${escapeHtml(
                     item.special_instructions,
                   )}”</p>`
-                : ''
+                : ""
             }
             <p class="cart-row-price">${fmt(item.unit_price)} c/u</p>
           </div>
@@ -1099,7 +1176,7 @@
         </div>
       `,
       )
-      .join('');
+      .join("");
 
     root.innerHTML = `
       <div class="sheet-handle"></div>
@@ -1122,7 +1199,7 @@
         type="text"
         maxlength="100"
         placeholder="Ej: Juan Pérez"
-        value="${escapeAttr(state.activeCustomerName || '')}"
+        value="${escapeAttr(state.activeCustomerName || "")}"
       />
 
       <label class="cart-field-label">Teléfono <span class="opt">(opcional)</span></label>
@@ -1156,7 +1233,7 @@
         El pago se hace en caja al terminar.
       </p>
     `;
-    $('modal-cart').classList.remove('hidden');
+    $("modal-cart").classList.remove("hidden");
   }
 
   // ---------------------------------------------------------------
@@ -1164,31 +1241,28 @@
   // ---------------------------------------------------------------
   function renderCartFab() {
     const count = state.cart.reduce((s, i) => s + i.quantity, 0);
-    const total = state.cart.reduce(
-      (s, i) => s + i.unit_price * i.quantity,
-      0,
-    );
-    const fab = $('cart-fab');
+    const total = state.cart.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+    const fab = $("cart-fab");
     if (count === 0) {
-      fab.classList.add('hidden');
+      fab.classList.add("hidden");
       return;
     }
-    fab.classList.remove('hidden');
-    $('cart-count').textContent = String(count);
-    $('cart-total').textContent = fmt(total);
+    fab.classList.remove("hidden");
+    $("cart-count").textContent = String(count);
+    $("cart-total").textContent = fmt(total);
   }
 
   // ---------------------------------------------------------------
   // Escape helpers (prevenir XSS desde el menú del tenant)
   // ---------------------------------------------------------------
   function escapeHtml(s) {
-    if (s == null) return '';
+    if (s == null) return "";
     return String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
   }
 
   function escapeAttr(s) {
@@ -1198,8 +1272,8 @@
   // Pide imagen comprimida a Cloudinary: 400px ancho, calidad auto,
   // formato auto (WebP/AVIF). Reduce un PNG de 1.5MB a ~30-60KB.
   function cdnImg(url) {
-    if (!url || !url.includes('res.cloudinary.com')) return url;
-    return url.replace('/upload/', '/upload/w_400,q_auto,f_auto/');
+    if (!url || !url.includes("res.cloudinary.com")) return url;
+    return url.replace("/upload/", "/upload/w_400,q_auto,f_auto/");
   }
 
   // ---------------------------------------------------------------
@@ -1210,34 +1284,34 @@
    * (brand), los anteriores verdes (done), los siguientes grises.
    */
   const TRACKING_STEPS = [
-    { stage: 'pending_review', label: 'Recibido', sub: 'Esperando aprobación' },
-    { stage: 'preparing', label: 'En preparación', sub: 'Cocina trabajando' },
-    { stage: 'ready', label: 'Listo', sub: 'Para servir / retirar' },
-    { stage: 'completed', label: 'Finalizado', sub: 'Pedido cerrado' },
+    { stage: "pending_review", label: "Recibido", sub: "Esperando aprobación" },
+    { stage: "preparing", label: "En preparación", sub: "Cocina trabajando" },
+    { stage: "ready", label: "Listo", sub: "Para servir / retirar" },
+    { stage: "completed", label: "Finalizado", sub: "Pedido cerrado" },
   ];
 
   function renderTracking(payload) {
     // Header con icono y mensaje según el stage.
-    const stage = payload.stage || 'pending_review';
+    const stage = payload.stage || "pending_review";
     const stageMeta = stageVisual(stage);
 
-    $('track-icon').className = `track-icon-wrap ${stageMeta.bg}`;
-    $('track-icon').innerHTML = stageMeta.icon;
+    $("track-icon").className = `track-icon-wrap ${stageMeta.bg}`;
+    $("track-icon").innerHTML = stageMeta.icon;
 
-    $('track-title').textContent = stageMeta.title;
-    $('track-message').textContent =
+    $("track-title").textContent = stageMeta.title;
+    $("track-message").textContent =
       payload.message || stageMeta.fallbackMessage;
-    $('track-order-number').textContent = payload.order_number || '—';
+    $("track-order-number").textContent = payload.order_number || "—";
 
     // Timeline.
     renderTrackingTimeline(stage, payload);
 
     // Items.
-    const itemsEl = $('track-items');
-    itemsEl.innerHTML = '';
+    const itemsEl = $("track-items");
+    itemsEl.innerHTML = "";
     (payload.items || []).forEach((it) => {
-      const row = document.createElement('div');
-      row.className = 'track-item';
+      const row = document.createElement("div");
+      row.className = "track-item";
       row.innerHTML = `
         <span>
           <span class="track-item-q">${it.quantity}×</span>
@@ -1247,21 +1321,21 @@
       itemsEl.appendChild(row);
 
       if (it.special_instructions) {
-        const note = document.createElement('div');
-        note.className = 'track-item-note';
+        const note = document.createElement("div");
+        note.className = "track-item-note";
         note.textContent = it.special_instructions;
         itemsEl.appendChild(note);
       }
     });
 
     // Total.
-    $('track-total').textContent = fmt(payload.total_amount || 0);
+    $("track-total").textContent = fmt(payload.total_amount || 0);
 
     // Mensaje de refresh con timestamp.
     const now = new Date();
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mm = String(now.getMinutes()).padStart(2, '0');
-    $('track-refresh-status').textContent =
+    const hh = String(now.getHours()).padStart(2, "0");
+    const mm = String(now.getMinutes()).padStart(2, "0");
+    $("track-refresh-status").textContent =
       `Actualizado a las ${hh}:${mm} · Se refresca solo cada 15s`;
   }
 
@@ -1269,92 +1343,92 @@
     // El color del trazo lo hereda el SVG vía `currentColor` desde la
     // clase `track-icon-*` del wrapper (definidas en index.html).
     switch (stage) {
-      case 'pending_review':
+      case "pending_review":
         return {
-          bg: 'track-icon-amber',
+          bg: "track-icon-amber",
           icon: `<svg width="44" height="44" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M12 8v4l3 3M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
                 </svg>`,
-          title: 'Recibimos tu pedido',
-          fallbackMessage: 'El mesero lo está revisando.',
+          title: "Recibimos tu pedido",
+          fallbackMessage: "El mesero lo está revisando.",
         };
-      case 'preparing':
+      case "preparing":
         return {
-          bg: 'track-icon-brand',
+          bg: "track-icon-brand",
           icon: `<svg width="44" height="44" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
                 </svg>`,
-          title: 'En preparación',
-          fallbackMessage: 'La cocina está haciendo tu pedido.',
+          title: "En preparación",
+          fallbackMessage: "La cocina está haciendo tu pedido.",
         };
-      case 'ready':
+      case "ready":
         return {
-          bg: 'track-icon-green',
+          bg: "track-icon-green",
           icon: `<svg width="44" height="44" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
                 </svg>`,
-          title: '¡Pedido listo!',
-          fallbackMessage: 'El mesero te lo trae enseguida.',
+          title: "¡Pedido listo!",
+          fallbackMessage: "El mesero te lo trae enseguida.",
         };
-      case 'delivered':
-      case 'completed':
+      case "delivered":
+      case "completed":
         return {
-          bg: 'track-icon-green',
+          bg: "track-icon-green",
           icon: `<svg width="44" height="44" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
                 </svg>`,
-          title: '¡Gracias por tu visita!',
-          fallbackMessage: 'Pedido finalizado.',
+          title: "¡Gracias por tu visita!",
+          fallbackMessage: "Pedido finalizado.",
         };
-      case 'cancelled':
+      case "cancelled":
         return {
-          bg: 'track-icon-red',
+          bg: "track-icon-red",
           icon: `<svg width="44" height="44" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M6 18L18 6M6 6l12 12"/>
                 </svg>`,
-          title: 'Pedido cancelado',
-          fallbackMessage: 'Hablá con el mesero para más info.',
+          title: "Pedido cancelado",
+          fallbackMessage: "Hablá con el mesero para más info.",
         };
       default:
         return {
-          bg: 'track-icon-muted',
-          icon: '',
-          title: 'Procesando…',
-          fallbackMessage: '',
+          bg: "track-icon-muted",
+          icon: "",
+          title: "Procesando…",
+          fallbackMessage: "",
         };
     }
   }
 
   function renderTrackingTimeline(currentStage, payload) {
-    const root = $('track-timeline');
-    root.innerHTML = '';
+    const root = $("track-timeline");
+    root.innerHTML = "";
 
     // Si el pedido fue cancelado, NO mostramos timeline (no aplica).
-    if (currentStage === 'cancelled') return;
+    if (currentStage === "cancelled") return;
 
     // Determinar qué stage está done vs pending vs current.
-    const stageOrder = ['pending_review', 'preparing', 'ready', 'completed'];
+    const stageOrder = ["pending_review", "preparing", "ready", "completed"];
     const currentIdx = Math.max(0, stageOrder.indexOf(currentStage));
 
     // Línea vertical que conecta los círculos.
-    const line = document.createElement('div');
-    line.className = 'tl-line';
+    const line = document.createElement("div");
+    line.className = "tl-line";
     root.appendChild(line);
 
     TRACKING_STEPS.forEach((step, idx) => {
       const isDone = idx < currentIdx;
       const isCurrent = idx === currentIdx;
-      const stateClass = isDone ? 'done' : isCurrent ? 'current' : 'todo';
+      const stateClass = isDone ? "done" : isCurrent ? "current" : "todo";
 
-      const row = document.createElement('div');
-      row.className = 'tl-row';
+      const row = document.createElement("div");
+      row.className = "tl-row";
 
       // Timestamp del paso si lo tenemos.
-      let timestamp = '';
+      let timestamp = "";
       const tsField = {
         pending_review: payload.created_at,
         preparing: payload.preparing_at ?? payload.confirmed_at,
@@ -1363,13 +1437,13 @@
       }[step.stage];
       if (tsField) {
         const dt = new Date(tsField);
-        const hh = String(dt.getHours()).padStart(2, '0');
-        const mm = String(dt.getMinutes()).padStart(2, '0');
+        const hh = String(dt.getHours()).padStart(2, "0");
+        const mm = String(dt.getMinutes()).padStart(2, "0");
         timestamp = `<div class="tl-time">${hh}:${mm}</div>`;
       }
 
       row.innerHTML = `
-        <div class="tl-dot ${stateClass}">${isDone ? '✓' : idx + 1}</div>
+        <div class="tl-dot ${stateClass}">${isDone ? "✓" : idx + 1}</div>
         <div style="flex: 1;">
           <div class="tl-label ${stateClass}">${step.label}</div>
           <div class="tl-sub">${step.sub}</div>
@@ -1400,17 +1474,17 @@
 
         // Detener polling si el pedido llegó a un estado terminal.
         if (
-          payload.stage === 'completed' ||
-          payload.stage === 'cancelled' ||
-          payload.stage === 'delivered'
+          payload.stage === "completed" ||
+          payload.stage === "cancelled" ||
+          payload.stage === "delivered"
         ) {
           stopTracking();
         }
       } catch (err) {
         // Errores transitorios — seguimos intentando. Mostramos un
         // hint discreto en el indicador de refresh.
-        $('track-refresh-status').textContent =
-          'No pudimos refrescar. Reintentando…';
+        $("track-refresh-status").textContent =
+          "No pudimos refrescar. Reintentando…";
       }
     };
 
@@ -1444,17 +1518,17 @@
 
     /// Toast no bloqueante (avisos cortos, ej. "elegí las cremas").
     toast(message) {
-      let el = $('app-toast');
+      let el = $("app-toast");
       if (!el) {
-        el = document.createElement('div');
-        el.id = 'app-toast';
-        el.className = 'app-toast';
+        el = document.createElement("div");
+        el.id = "app-toast";
+        el.className = "app-toast";
         document.body.appendChild(el);
       }
       el.textContent = message;
-      el.classList.add('is-visible');
+      el.classList.add("is-visible");
       clearTimeout(el._t);
-      el._t = setTimeout(() => el.classList.remove('is-visible'), 2600);
+      el._t = setTimeout(() => el.classList.remove("is-visible"), 2600);
     },
 
     openProduct(product) {
@@ -1469,7 +1543,7 @@
         forceOrEvent.target !== forceOrEvent.currentTarget
       )
         return;
-      $('modal-product').classList.add('hidden');
+      $("modal-product").classList.add("hidden");
       modalProductState = null;
     },
 
@@ -1484,10 +1558,10 @@
       modalProductState.unit_price = variant.price;
 
       // Marcar visualmente la opción elegida.
-      const root = $('product-detail');
-      root.querySelectorAll('.pm-variant').forEach((el) => {
+      const root = $("product-detail");
+      root.querySelectorAll(".pm-variant").forEach((el) => {
         el.classList.toggle(
-          'is-selected',
+          "is-selected",
           Number(el.dataset.variantIdx) === idx,
         );
       });
@@ -1495,13 +1569,13 @@
       // La cantidad de cremas depende de la variante (bolas). Reajustamos
       // los slots y re-renderizamos el selector de cremas.
       const scoops = variant.scoopCount || 0;
-      modalProductState.selectedFlavors = new Array(scoops).fill('');
-      const flavorsBox = $('prod-flavors');
+      modalProductState.selectedFlavors = new Array(scoops).fill("");
+      const flavorsBox = $("prod-flavors");
       if (flavorsBox) flavorsBox.innerHTML = flavorSectionHtml();
 
       // Refrescar precio mostrado + total del botón "Agregar".
-      $('prod-price').textContent = fmt(variant.price);
-      $('prod-total').textContent = fmt(
+      $("prod-price").textContent = fmt(variant.price);
+      $("prod-total").textContent = fmt(
         variant.price * modalProductState.quantity,
       );
     },
@@ -1510,17 +1584,15 @@
     selectFlavor(slot, flavorId) {
       if (!modalProductState) return;
       if (slot < 0 || slot >= modalProductState.selectedFlavors.length) return;
-      modalProductState.selectedFlavors[slot] = flavorId || '';
+      modalProductState.selectedFlavors[slot] = flavorId || "";
     },
 
     changeQty(delta) {
       if (!modalProductState) return;
       const next = Math.max(1, modalProductState.quantity + delta);
       modalProductState.quantity = next;
-      $('prod-qty').textContent = String(next);
-      $('prod-total').textContent = fmt(
-        modalProductState.unit_price * next,
-      );
+      $("prod-qty").textContent = String(next);
+      $("prod-total").textContent = fmt(modalProductState.unit_price * next);
     },
 
     updateNotes(value) {
@@ -1541,19 +1613,19 @@
       addLine({
         product_id: product.id,
         variant_id: undefined,
-        variant_name: '',
+        variant_name: "",
         name: product.name,
         unit_price,
         quantity: 1,
-        special_instructions: '',
+        special_instructions: "",
       });
       persistCart();
       renderCartFab();
       if (btnEl) {
-        btnEl.classList.remove('pulsing');
+        btnEl.classList.remove("pulsing");
         // reflow para reiniciar la animación si se toca rápido seguido
         void btnEl.offsetWidth;
-        btnEl.classList.add('pulsing');
+        btnEl.classList.add("pulsing");
       }
     },
 
@@ -1577,7 +1649,7 @@
       const scoops = selectedFlavors.length;
       if (scoops > 0) {
         if (categoryFlavors.length === 0) {
-          App.toast('Este producto necesita cremas y aún no hay cargadas.');
+          App.toast("Este producto necesita cremas y aún no hay cargadas.");
           return;
         }
         if (selectedFlavors.some((f) => !f)) {
@@ -1589,17 +1661,17 @@
       // Nombres de las cremas para mostrar en el carrito (en orden de bola).
       const flavorNames = selectedFlavors.map((id) => {
         const f = categoryFlavors.find((x) => x.id === id);
-        return f ? f.name : '';
+        return f ? f.name : "";
       });
 
       addLine({
         product_id: product.id,
         variant_id: variant ? variant.id : undefined,
-        variant_name: variant ? variant.name : '',
+        variant_name: variant ? variant.name : "",
         name: product.name,
         unit_price,
         quantity,
-        special_instructions: special_instructions || '',
+        special_instructions: special_instructions || "",
         flavor_ids: scoops > 0 ? [...selectedFlavors] : undefined,
         flavor_names: scoops > 0 ? flavorNames : undefined,
       });
@@ -1619,7 +1691,7 @@
         forceOrEvent.target !== forceOrEvent.currentTarget
       )
         return;
-      $('modal-cart').classList.add('hidden');
+      $("modal-cart").classList.add("hidden");
     },
 
     updateCartQty(index, delta) {
@@ -1641,36 +1713,36 @@
     async submitOrder() {
       if (state.submitting) return;
 
-      const name = $('cust-name').value.trim();
-      const phone = $('cust-phone').value.trim();
-      const notes = $('order-notes').value.trim();
-      const errEl = $('submit-error');
-      errEl.classList.add('hidden');
+      const name = $("cust-name").value.trim();
+      const phone = $("cust-phone").value.trim();
+      const notes = $("order-notes").value.trim();
+      const errEl = $("submit-error");
+      errEl.classList.add("hidden");
 
       if (name.length < 2) {
-        errEl.textContent = 'Ingresá tu nombre.';
-        errEl.classList.remove('hidden');
+        errEl.textContent = "Ingresá tu nombre.";
+        errEl.classList.remove("hidden");
         return;
       }
       // Teléfono OPCIONAL: solo validamos el formato si el cliente
       // escribió algo. Si lo deja vacío, seguimos — exigirlo frenaba el
       // pedido y muchos clientes no quieren dejarlo.
-      const phoneDigits = phone.replace(/\D/g, '');
+      const phoneDigits = phone.replace(/\D/g, "");
       if (phone.length > 0 && phoneDigits.length < 7) {
-        errEl.textContent = 'Teléfono inválido (dejalo vacío si no querés).';
-        errEl.classList.remove('hidden');
+        errEl.textContent = "Teléfono inválido (dejalo vacío si no querés).";
+        errEl.classList.remove("hidden");
         return;
       }
       if (state.cart.length === 0) {
-        errEl.textContent = 'Agregá al menos un producto.';
-        errEl.classList.remove('hidden');
+        errEl.textContent = "Agregá al menos un producto.";
+        errEl.classList.remove("hidden");
         return;
       }
 
-      const btn = $('submit-btn');
+      const btn = $("submit-btn");
       state.submitting = true;
       btn.disabled = true;
-      btn.textContent = 'Enviando…';
+      btn.textContent = "Enviando…";
 
       try {
         const payload = {
@@ -1694,11 +1766,10 @@
 
         clearCart();
         renderCartFab();
-        $('modal-cart').classList.add('hidden');
+        $("modal-cart").classList.add("hidden");
 
         const orderNumber =
-          (result && (result.order_number || result.data?.order_number)) ||
-          '';
+          (result && (result.order_number || result.data?.order_number)) || "";
         const newTabSessionId =
           (result && (result.tab_session_id || result.data?.tab_session_id)) ||
           state.activeTabSessionId ||
@@ -1711,17 +1782,30 @@
         // Arrancamos tracking inmediatamente — el usuario ve la
         // pantalla de tracking con estado live + auto-refresh cada 15s
         // hasta que el pedido termine.
-        showScreen('screen-tracking');
+        showScreen("screen-tracking");
         await startTracking(orderNumber);
       } catch (err) {
+        const msg = err.message || "";
+        // El backend indica que la tab guardada es de ayer → limpiar sesión
+        // y reintentar automáticamente sin el tab_session_id.
+        if (msg.includes("SESSION_FROM_PREVIOUS_DAY")) {
+          clearActiveSession();
+          state.activeTabSessionId = null;
+          state.activeCustomerName = null;
+          errEl.textContent =
+            "Tu sesión anterior era de ayer. Se creó una cuenta nueva.";
+          errEl.classList.remove("hidden");
+          // Reintento automático sin la sesión vieja
+          setTimeout(() => App.submitOrder(), 800);
+          return;
+        }
         errEl.textContent =
-          err.message ||
-          'No se pudo enviar el pedido. Intentá de nuevo o llamá al mozo.';
-        errEl.classList.remove('hidden');
+          msg || "No se pudo enviar el pedido. Intentá de nuevo o llamá al mesero.";
+        errEl.classList.remove("hidden");
       } finally {
         state.submitting = false;
         btn.disabled = false;
-        btn.textContent = 'Enviar pedido';
+        btn.textContent = "Enviar pedido";
       }
     },
 
@@ -1737,8 +1821,8 @@
     // Limpia la cuenta activa y vuelve al menú (para "Nueva cuenta").
     resetSession() {
       clearActiveSession();
-      const banner = $('session-banner');
-      if (banner) banner.classList.add('hidden');
+      const banner = $("session-banner");
+      if (banner) banner.classList.add("hidden");
       // El estado del menú ya está listo; solo ocultamos el banner.
     },
 
@@ -1746,17 +1830,171 @@
     resumeSession(tabSessionId, customerName) {
       state.activeTabSessionId = tabSessionId;
       state.activeCustomerName = customerName;
-      const banner = $('session-banner');
-      if (banner) banner.classList.add('hidden');
-      App.toast(`Perfecto, ${customerName || 'hola'}! Agregá lo que querás a tu cuenta.`);
+      const banner = $("session-banner");
+      if (banner) banner.classList.add("hidden");
+      App.toast(
+        `Perfecto, ${customerName || "hola"}! Agregá lo que querás a tu cuenta.`,
+      );
     },
 
     // Navega a la pantalla de tracking del último pedido de la sesión.
     trackLastOrder(orderNumber) {
-      const banner = $('session-banner');
-      if (banner) banner.classList.add('hidden');
-      showScreen('screen-tracking');
+      const banner = $("session-banner");
+      if (banner) banner.classList.add("hidden");
+      showScreen("screen-tracking");
       startTracking(orderNumber);
+    },
+
+    // ── Reserva de mesa ─────────────────────────────────────────────
+    openReservation() {
+      const modal = $("modal-reservation");
+      const content = $("reservation-content");
+      if (!modal || !content) return;
+
+      // Fecha mínima = hoy en Colombia
+      const minDate = todayInColombia();
+
+      content.innerHTML = `
+        <div class="resv-modal-header">
+          <h2 class="resv-modal-title">Reservar mesa</h2>
+          <button class="resv-modal-close btn-press" onclick="App.closeReservation()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="resv-form-group">
+          <label class="resv-label" for="resv-name">Tu nombre *</label>
+          <input id="resv-name" class="resv-input" type="text" placeholder="Ej: María González" maxlength="100" />
+        </div>
+
+        <div class="resv-input-row">
+          <div class="resv-form-group">
+            <label class="resv-label" for="resv-phone">Teléfono</label>
+            <input id="resv-phone" class="resv-input" type="tel" placeholder="Ej: 3001234567" maxlength="20" />
+          </div>
+          <div class="resv-form-group">
+            <label class="resv-label" for="resv-party">Personas *</label>
+            <input id="resv-party" class="resv-input" type="number" placeholder="2" min="1" max="50" value="2" />
+          </div>
+        </div>
+
+        <div class="resv-input-row">
+          <div class="resv-form-group">
+            <label class="resv-label" for="resv-date">Fecha *</label>
+            <input id="resv-date" class="resv-input" type="date" min="${minDate}" />
+          </div>
+          <div class="resv-form-group">
+            <label class="resv-label" for="resv-time">Hora *</label>
+            <input id="resv-time" class="resv-input" type="time" />
+          </div>
+        </div>
+
+        <div class="resv-form-group">
+          <label class="resv-label" for="resv-notes">Notas (opcional)</label>
+          <input id="resv-notes" class="resv-input" type="text" placeholder="Ej: Cumpleaños, sin cebolla..." maxlength="500" />
+        </div>
+
+        <div id="resv-error" class="resv-error"></div>
+
+        <button id="resv-submit" class="resv-submit btn-press" onclick="App.submitReservation()">
+          Confirmar reserva
+        </button>
+      `;
+
+      modal.classList.remove("hidden");
+      setTimeout(() => {
+        const nameInput = document.getElementById("resv-name");
+        if (nameInput) nameInput.focus();
+      }, 120);
+    },
+
+    closeReservation(e) {
+      if (e && e.target !== $("modal-reservation")) return;
+      $("modal-reservation")?.classList.add("hidden");
+    },
+
+    async submitReservation() {
+      const name = (document.getElementById("resv-name")?.value || "").trim();
+      const phone = (document.getElementById("resv-phone")?.value || "").trim();
+      const party = parseInt(document.getElementById("resv-party")?.value || "2", 10);
+      const date = document.getElementById("resv-date")?.value || "";
+      const time = document.getElementById("resv-time")?.value || "";
+      const notes = (document.getElementById("resv-notes")?.value || "").trim();
+
+      const errEl = $("resv-error");
+      const submitBtn = $("resv-submit");
+
+      const showErr = (msg) => {
+        if (errEl) { errEl.textContent = msg; errEl.style.display = "block"; }
+      };
+
+      if (errEl) errEl.style.display = "none";
+
+      if (!name) return showErr("Tu nombre es obligatorio.");
+      if (!date) return showErr("Elegí una fecha.");
+      if (!time) return showErr("Elegí una hora.");
+      if (!party || party < 1) return showErr("Indicá cuántas personas serán.");
+
+      const reservedFor = `${date}T${time}:00`;
+
+      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Enviando…"; }
+
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/public/reservations`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({
+            code: state.code,
+            customer_name: name,
+            customer_phone: phone || undefined,
+            party_size: party,
+            reserved_for: reservedFor,
+            notes: notes || undefined,
+          }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const msg = Array.isArray(body.message)
+            ? body.message[0]
+            : body.message || `Error ${res.status}`;
+          throw new Error(msg);
+        }
+
+        // Éxito — mostrar confirmación
+        const content = $("reservation-content");
+        if (content) {
+          const fmtDate = new Date(`${date}T${time}:00`).toLocaleString("es-CO", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          content.innerHTML = `
+            <div class="resv-success">
+              <div class="resv-success-icon">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 6L9 17l-5-5"/>
+                </svg>
+              </div>
+              <h3 class="resv-success-title">¡Reserva enviada!</h3>
+              <p class="resv-success-msg">
+                Hola ${escapeHtml(name)}, recibimos tu reserva para <strong>${party} persona${party !== 1 ? "s" : ""}</strong>
+                el <strong>${fmtDate}</strong>.<br><br>
+                El restaurante la confirmará pronto.
+              </p>
+              <button class="resv-success-btn btn-press" onclick="$('modal-reservation').classList.add('hidden')">
+                Cerrar
+              </button>
+            </div>
+          `;
+        }
+      } catch (err) {
+        showErr(err.message || "No pudimos enviar la reserva. Intentá de nuevo.");
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Confirmar reserva"; }
+      }
     },
   };
 
@@ -1783,27 +2021,35 @@
   function showSessionBanner(session) {
     _bannerSession = session;
 
-    let banner = $('session-banner');
+    let banner = $("session-banner");
     if (!banner) {
-      banner = document.createElement('div');
-      banner.id = 'session-banner';
+      banner = document.createElement("div");
+      banner.id = "session-banner";
       banner.style.cssText = [
-        'position:fixed', 'bottom:0', 'left:0', 'right:0', 'z-index:900',
-        'background:#1e293b', 'color:#f8fafc',
-        'padding:14px 16px 20px', 'border-top:2px solid #f59e0b',
-        'display:flex', 'flex-direction:column', 'gap:10px',
-        'box-shadow:0 -4px 24px rgba(0,0,0,.4)',
-        'font-family:inherit',
-      ].join(';');
+        "position:fixed",
+        "bottom:0",
+        "left:0",
+        "right:0",
+        "z-index:900",
+        "background:#1e293b",
+        "color:#f8fafc",
+        "padding:14px 16px 20px",
+        "border-top:2px solid #f59e0b",
+        "display:flex",
+        "flex-direction:column",
+        "gap:10px",
+        "box-shadow:0 -4px 24px rgba(0,0,0,.4)",
+        "font-family:inherit",
+      ].join(";");
       document.body.appendChild(banner);
     }
 
     const nameText = session.customerName
       ? `Hola, <strong>${escapeHtml(session.customerName)}</strong>!`
-      : 'Hola!';
+      : "Hola!";
     const orderRef = session.lastOrderNumber
       ? `Tu último pedido: <strong>${escapeHtml(session.lastOrderNumber)}</strong>.`
-      : '';
+      : "";
 
     banner.innerHTML = `
       <p style="margin:0;font-size:15px;line-height:1.4">
@@ -1815,12 +2061,16 @@
                  background:#f59e0b;color:#1e293b;font-weight:700;font-size:14px;cursor:pointer">
           Agregar más cosas
         </button>
-        ${session.lastOrderNumber ? `
+        ${
+          session.lastOrderNumber
+            ? `
         <button id="sb-track"
           style="flex:1;min-width:100px;padding:10px 12px;border:1px solid #94a3b8;border-radius:8px;
                  background:transparent;color:#f8fafc;font-size:14px;cursor:pointer">
           Ver mi pedido
-        </button>` : ''}
+        </button>`
+            : ""
+        }
         <button id="sb-reset"
           style="padding:10px 12px;border:none;border-radius:8px;
                  background:#334155;color:#94a3b8;font-size:13px;cursor:pointer">
@@ -1828,18 +2078,19 @@
         </button>
       </div>
     `;
-    banner.classList.remove('hidden');
+    banner.classList.remove("hidden");
 
     // Vincular eventos desde JS (evita inlinear strings con comillas).
-    const sbResume = document.getElementById('sb-resume');
-    if (sbResume) sbResume.onclick = () =>
-      App.resumeSession(session.tabSessionId, session.customerName || '');
+    const sbResume = document.getElementById("sb-resume");
+    if (sbResume)
+      sbResume.onclick = () =>
+        App.resumeSession(session.tabSessionId, session.customerName || "");
 
-    const sbTrack = document.getElementById('sb-track');
-    if (sbTrack) sbTrack.onclick = () =>
-      App.trackLastOrder(session.lastOrderNumber);
+    const sbTrack = document.getElementById("sb-track");
+    if (sbTrack)
+      sbTrack.onclick = () => App.trackLastOrder(session.lastOrderNumber);
 
-    const sbReset = document.getElementById('sb-reset');
+    const sbReset = document.getElementById("sb-reset");
     if (sbReset) sbReset.onclick = () => App.resetSession();
   }
 
@@ -1849,7 +2100,7 @@
   async function boot() {
     const code = extractCode();
     if (!code) {
-      showError('Falta el código del QR. Pedile el QR al mesero.');
+      showError("Falta el código del QR. Pedile el QR al mesero.");
       return;
     }
     state.code = code;
@@ -1861,7 +2112,7 @@
     try {
       const lastOrder = sessionStorage.getItem(`tracking:${code}`);
       if (lastOrder) {
-        showScreen('screen-tracking');
+        showScreen("screen-tracking");
         await startTracking(lastOrder);
         return;
       }
@@ -1909,7 +2160,7 @@
       renderCategories();
       renderCartFab();
 
-      showScreen('screen-menu');
+      showScreen("screen-menu");
 
       // ── Bienvenida a cliente recurrente ─────────────────────────
       // Verificar si tiene una cuenta activa (pedido previo < 8h).
@@ -1920,23 +2171,23 @@
       }
     } catch (err) {
       if (err.status === 404) {
-        showError('Este QR no es válido. Pedile al mozo el QR nuevo.');
+        showError("Este QR no es válido. Pide el QR nuevo.");
       } else if (err.status === 410) {
-        showError('Este QR ya no está activo. Pedile el QR nuevo al mozo.');
+        showError("Este QR ya no está activo. Pedile el QR nuevo.");
       } else if (err.status === 429) {
-        showError('Estás haciendo muchas peticiones. Esperá un momento.');
+        showError("Estás haciendo muchas peticiones. Esperá un momento.");
       } else {
         showError(
           err.message ||
-            'No pudimos conectar con el restaurante. Probá de nuevo.',
+            "No pudimos conectar con el restaurante. Probá de nuevo.",
         );
       }
     }
   }
 
   // Esperar a que el DOM esté listo (Tailwind por CDN tarda unos ms).
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
   } else {
     boot();
   }

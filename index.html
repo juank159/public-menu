@@ -1616,6 +1616,164 @@
       }
 
       /* =================================================================
+         BOTONES DE ACCIÓN DEL MENÚ (Reservar / Descargar PDF)
+         ================================================================= */
+      .menu-header-actions {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        padding: 10px 16px 14px;
+        background: rgba(15, 8, 3, 0.90);
+        border-bottom: 1px solid rgba(184, 137, 62, 0.18);
+        flex-wrap: wrap;
+      }
+      .menu-action-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        border-radius: 999px;
+        font-family: 'Inter', sans-serif;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-decoration: none;
+        transition: transform 80ms, background-color 120ms;
+      }
+      .menu-action-btn:active { transform: scale(0.96); }
+      .menu-action-btn.primary {
+        background: var(--gold-dark);
+        color: #f4e8cf;
+        border: none;
+      }
+      .menu-action-btn.primary:hover { background: var(--gold); }
+      .menu-action-btn.secondary {
+        background: transparent;
+        color: var(--gold-light);
+        border: 1px solid rgba(184, 137, 62, 0.5);
+      }
+      .menu-action-btn.secondary:hover { border-color: var(--gold-light); }
+      .menu-action-btn svg { flex-shrink: 0; }
+
+      /* =================================================================
+         MODAL DE RESERVA
+         ================================================================= */
+      .resv-modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 18px;
+      }
+      .resv-modal-title {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 22px;
+        font-weight: 600;
+        color: var(--ink-primary);
+        margin: 0;
+      }
+      .resv-modal-close {
+        width: 36px;
+        height: 36px;
+        border-radius: 9999px;
+        background: rgba(120, 80, 20, 0.1);
+        color: var(--ink-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        border: none;
+        cursor: pointer;
+      }
+      .resv-form-group {
+        margin-bottom: 14px;
+      }
+      .resv-label {
+        display: block;
+        font-family: 'Inter', sans-serif;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-muted);
+        margin-bottom: 5px;
+      }
+      .resv-input {
+        width: 100%;
+        padding: 10px 13px;
+        border: 1px solid rgba(120, 80, 20, 0.3);
+        border-radius: 10px;
+        font-family: 'Inter', sans-serif;
+        font-size: 14px;
+        background: rgba(255, 255, 255, 0.55);
+        color: var(--ink-primary);
+        box-sizing: border-box;
+      }
+      .resv-input:focus { outline: none; border-color: var(--gold-dark); }
+      .resv-input-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+      .resv-submit {
+        width: 100%;
+        margin-top: 18px;
+        padding: 14px;
+        border-radius: 12px;
+        background: var(--gold-dark);
+        color: var(--paper-cream);
+        font-family: 'Inter', sans-serif;
+        font-weight: 700;
+        font-size: 14px;
+        letter-spacing: 0.03em;
+        border: none;
+        cursor: pointer;
+        transition: background-color 120ms, transform 80ms;
+      }
+      .resv-submit:active { transform: scale(0.98); }
+      .resv-submit:disabled { opacity: 0.55; cursor: not-allowed; }
+      .resv-error {
+        margin-top: 10px;
+        padding: 10px 13px;
+        background: rgba(220, 50, 50, 0.1);
+        border: 1px solid rgba(220, 50, 50, 0.3);
+        border-radius: 8px;
+        font-size: 13px;
+        color: #c0392b;
+        display: none;
+      }
+      .resv-success {
+        text-align: center;
+        padding: 24px 8px;
+      }
+      .resv-success-icon {
+        width: 60px; height: 60px;
+        border-radius: 9999px;
+        background: rgba(39, 174, 96, 0.12);
+        display: flex; align-items: center; justify-content: center;
+        margin: 0 auto 16px;
+        color: #27ae60;
+      }
+      .resv-success-title {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 22px; font-weight: 600;
+        color: var(--ink-primary);
+        margin: 0 0 8px;
+      }
+      .resv-success-msg {
+        font-size: 14px; color: var(--ink-secondary);
+        margin: 0 0 20px;
+        line-height: 1.5;
+      }
+      .resv-success-btn {
+        padding: 11px 28px;
+        border-radius: 999px;
+        background: var(--gold-dark);
+        color: var(--paper-cream);
+        font-weight: 700; font-size: 13px;
+        border: none; cursor: pointer;
+      }
+
+      /* =================================================================
          REDUCED MOTION — accesibilidad
          Los usuarios con "Reduce motion" activado en SO ven un crossfade
          simple en vez del flip 3D. Estándar WCAG y respeta lo que
@@ -1668,7 +1826,7 @@
         </svg>
       </div>
       <h1 class="error-title">Ups, no podemos cargar la carta</h1>
-      <p id="error-message" class="error-msg">Pedile al mozo el QR nuevo.</p>
+      <p id="error-message" class="error-msg">Pedile el QR nuevo.</p>
       <button class="error-retry btn-press" onclick="location.reload()">Reintentar</button>
     </section>
 
@@ -1682,6 +1840,22 @@
         <p id="tenant-name" class="menu-header-tenant"></p>
         <h1 id="qr-label" class="menu-header-title"></h1>
       </header>
+
+      <!-- Botones de acción: Reservar + Descargar PDF -->
+      <div id="menu-header-actions" class="menu-header-actions hidden">
+        <button class="menu-action-btn primary btn-press" onclick="App.openReservation()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          Reservar mesa
+        </button>
+        <a id="pdf-download-link" class="menu-action-btn secondary btn-press" href="#" download="carta.pdf">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Descargar carta PDF
+        </a>
+      </div>
 
       <nav id="categories-tabs" class="menu-tabs-wrap no-scrollbar">
         <!-- Tabs se inyectan via JS -->
@@ -1765,10 +1939,19 @@
       <button class="track-restart btn-press" onclick="App.startOver()">Hacer otro pedido</button>
     </section>
 
+    <!-- Modal reserva -->
+    <div id="modal-reservation" class="modal-backdrop hidden" onclick="App.closeReservation(event)">
+      <div class="modal-sheet" onclick="event.stopPropagation()">
+        <div class="modal-content" id="reservation-content">
+          <!-- Inyectado por JS -->
+        </div>
+      </div>
+    </div>
+
     <!--
       Cache-busting: bumpear el `?v=` cada vez que `app.js` cambia para
       forzar a Caddy y al browser a soltar el caché viejo.
     -->
-    <script src="./app.js?v=20260621-16"></script>
+    <script src="./app.js?v=20260706-01"></script>
   </body>
 </html>
