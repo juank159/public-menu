@@ -1,0 +1,797 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+    <meta name="theme-color" content="#150a05" />
+    <meta name="api-base" content="https://food.plat.baudity.com" />
+    <title>Reservar mesa</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+      body {
+        font-family: 'Inter', system-ui, sans-serif;
+        font-size: 15px;
+        line-height: 1.5;
+        background: radial-gradient(ellipse at center, #2a1a0e 0%, #150a05 70%, #0a0503 100%);
+        background-attachment: fixed;
+        min-height: 100vh;
+        color: #1f1a14;
+      }
+      button { font-family: inherit; cursor: pointer; border: none; background: none; color: inherit; padding: 0; }
+      img { display: block; max-width: 100%; }
+
+      :root {
+        --paper-cream: #f4e8cf;
+        --paper-cream-deep: #e9d9b3;
+        --ink-primary: #2a1a08;
+        --ink-secondary: #5a3f1a;
+        --ink-muted: #8a6a3a;
+        --gold: #b8893e;
+        --gold-light: #d4a76a;
+        --gold-dark: #8d6420;
+        --leather: #1f120a;
+      }
+
+      .hidden { display: none !important; }
+      .safe-top  { padding-top:  max(env(safe-area-inset-top),  0.5rem); }
+      .safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 0.5rem); }
+      .btn-press { transition: transform 80ms ease; }
+      .btn-press:active { transform: scale(0.97); }
+
+      /* ── Pantalla de carga ── */
+      #screen-loading {
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; min-height: 100vh;
+        color: var(--gold-light);
+      }
+      .loading-spinner {
+        width: 40px; height: 40px;
+        border: 3px solid rgba(184,137,62,0.2);
+        border-top-color: var(--gold);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+        margin-bottom: 16px;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+      .loading-text {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 18px; color: var(--gold-light); opacity: 0.8;
+      }
+
+      /* ── Pantalla de error ── */
+      #screen-error {
+        display: flex; flex-direction: column; align-items: center;
+        justify-content: center; min-height: 100vh; text-align: center;
+        padding: 24px; color: var(--paper-cream);
+      }
+      .error-icon {
+        width: 72px; height: 72px; border-radius: 9999px;
+        background: rgba(220,60,60,0.16);
+        display: flex; align-items: center; justify-content: center;
+        margin-bottom: 20px; color: #ef5350;
+      }
+      .error-title { font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 600; margin: 0 0 8px; }
+      .error-msg { color: #c8b88e; max-width: 300px; margin: 0; font-size: 14px; }
+
+      /* ── Pantalla principal ── */
+      #screen-main { min-height: 100vh; }
+
+      /* Header */
+      .resv-header {
+        background: linear-gradient(to bottom, rgba(15,8,3,0.96), rgba(15,8,3,0.88));
+        border-bottom: 1px solid rgba(184,137,62,0.3);
+        padding: 18px 20px 16px;
+        text-align: center;
+        color: var(--paper-cream);
+      }
+      .resv-header-eyebrow {
+        font-size: 10px; font-weight: 600; letter-spacing: 0.3em;
+        text-transform: uppercase; color: var(--gold); margin: 0 0 4px;
+      }
+      .resv-header-title {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 26px; font-weight: 600; margin: 0; letter-spacing: 0.01em;
+      }
+      .resv-header-sub {
+        font-size: 12px; color: rgba(200,184,142,0.7); margin: 4px 0 0;
+      }
+
+      /* Tarjeta principal */
+      .resv-card {
+        margin: 20px 16px;
+        background: var(--paper-cream);
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+      }
+
+      /* Pasos */
+      .step { display: none; padding: 24px 20px; }
+      .step.is-active { display: block; }
+
+      .step-title {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 22px; font-weight: 600;
+        color: var(--ink-primary); margin: 0 0 4px;
+      }
+      .step-sub {
+        font-size: 12px; color: var(--ink-muted); margin: 0 0 20px;
+      }
+
+      /* Campos */
+      .field { margin-bottom: 14px; }
+      .field label {
+        display: block; font-size: 11px; font-weight: 600;
+        letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--ink-muted); margin-bottom: 5px;
+      }
+      .field input, .field select, .field textarea {
+        width: 100%; padding: 11px 13px;
+        border: 1px solid rgba(120,80,20,0.28);
+        border-radius: 10px; font-family: 'Inter', sans-serif; font-size: 14px;
+        background: rgba(255,255,255,0.6); color: var(--ink-primary);
+        appearance: none; -webkit-appearance: none;
+      }
+      .field input:focus, .field select:focus, .field textarea:focus {
+        outline: none; border-color: var(--gold-dark);
+        background: rgba(255,255,255,0.85);
+      }
+      .field textarea { resize: none; min-height: 72px; }
+      .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+      /* Botón principal */
+      .btn-primary {
+        width: 100%; padding: 14px; border-radius: 12px;
+        background: var(--gold-dark); color: var(--paper-cream);
+        font-weight: 700; font-size: 15px; letter-spacing: 0.02em;
+        margin-top: 6px; transition: background-color 120ms, transform 80ms;
+      }
+      .btn-primary:hover { background: var(--gold); }
+      .btn-primary:active { transform: scale(0.98); }
+      .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+      .btn-secondary {
+        width: 100%; padding: 11px; border-radius: 12px; margin-top: 10px;
+        border: 1px solid rgba(120,80,20,0.3); color: var(--ink-secondary);
+        font-size: 13px; font-weight: 600; background: transparent;
+      }
+      .btn-secondary:active { transform: scale(0.98); }
+
+      /* Error inline */
+      .inline-error {
+        margin-top: 12px; padding: 10px 13px;
+        background: rgba(220,50,50,0.08); border: 1px solid rgba(220,50,50,0.25);
+        border-radius: 8px; font-size: 13px; color: #c0392b;
+      }
+
+      /* ── Sección de productos (paso 2) ── */
+      .menu-section-title {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 18px; font-weight: 600; color: var(--ink-primary);
+        margin: 0 0 4px;
+      }
+      .menu-section-sub { font-size: 12px; color: var(--ink-muted); margin: 0 0 16px; }
+
+      .cat-label {
+        font-size: 11px; font-weight: 700; letter-spacing: 0.14em;
+        text-transform: uppercase; color: var(--gold-dark);
+        margin: 18px 0 8px;
+      }
+      .cat-label:first-child { margin-top: 0; }
+
+      .prod-item {
+        display: flex; align-items: center; gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid rgba(120,80,20,0.12);
+      }
+      .prod-item:last-child { border-bottom: none; }
+      .prod-info { flex: 1; min-width: 0; }
+      .prod-name {
+        font-size: 14px; font-weight: 600; color: var(--ink-primary);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .prod-price { font-size: 13px; color: var(--gold-dark); font-weight: 600; margin-top: 1px; }
+      .prod-desc {
+        font-size: 11px; color: var(--ink-muted);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        margin-top: 1px;
+      }
+
+      /* Stepper cantidad */
+      .prod-stepper { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+      .stepper-btn {
+        width: 30px; height: 30px; border-radius: 9999px;
+        border: 1.5px solid var(--gold-dark); color: var(--gold-dark);
+        font-size: 18px; font-weight: 600;
+        display: flex; align-items: center; justify-content: center;
+        background: transparent; flex-shrink: 0;
+        transition: transform 80ms;
+      }
+      .stepper-btn:active { transform: scale(0.88); }
+      .stepper-btn:disabled { opacity: 0.3; }
+      .stepper-val {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 18px; font-weight: 700; color: var(--ink-primary);
+        min-width: 18px; text-align: center;
+      }
+
+      /* Resumen carrito (paso 2) */
+      .cart-summary {
+        margin-top: 20px; padding: 14px 16px;
+        background: rgba(139,100,32,0.08); border-radius: 12px;
+        border: 1px solid rgba(139,100,32,0.2);
+      }
+      .cart-summary-title {
+        font-size: 12px; font-weight: 700; letter-spacing: 0.1em;
+        text-transform: uppercase; color: var(--gold-dark); margin: 0 0 8px;
+      }
+      .cart-line { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px; }
+      .cart-line-name { color: var(--ink-secondary); }
+      .cart-line-price { color: var(--ink-primary); font-weight: 600; }
+      .cart-total-row {
+        display: flex; justify-content: space-between;
+        border-top: 1px solid rgba(139,100,32,0.2);
+        margin-top: 8px; padding-top: 8px;
+        font-weight: 700; font-size: 14px; color: var(--ink-primary);
+      }
+
+      /* Pantalla de confirmación */
+      .confirm-screen {
+        padding: 32px 20px; text-align: center;
+      }
+      .confirm-icon {
+        width: 64px; height: 64px; border-radius: 9999px;
+        background: rgba(39,174,96,0.12);
+        display: flex; align-items: center; justify-content: center;
+        margin: 0 auto 20px; color: #27ae60;
+      }
+      .confirm-title {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 26px; font-weight: 600; color: var(--ink-primary);
+        margin: 0 0 10px;
+      }
+      .confirm-msg {
+        font-size: 14px; color: var(--ink-secondary);
+        line-height: 1.6; margin: 0 0 8px;
+      }
+      .confirm-detail {
+        display: inline-block; margin-top: 16px; padding: 12px 20px;
+        background: rgba(139,100,32,0.08); border-radius: 12px;
+        border: 1px solid rgba(139,100,32,0.2);
+        text-align: left; width: 100%;
+      }
+      .confirm-detail-row {
+        display: flex; justify-content: space-between; align-items: baseline;
+        font-size: 13px; margin-bottom: 4px;
+      }
+      .confirm-detail-row:last-child { margin-bottom: 0; }
+      .confirm-detail-key { color: var(--ink-muted); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+      .confirm-detail-val { color: var(--ink-primary); font-weight: 600; }
+
+      /* Paginador de pasos */
+      .step-dots {
+        display: flex; justify-content: center; gap: 7px; padding: 16px 0 6px;
+      }
+      .step-dot {
+        width: 7px; height: 7px; border-radius: 9999px;
+        background: rgba(139,100,32,0.25); transition: background 200ms;
+      }
+      .step-dot.is-active { background: var(--gold-dark); }
+
+      @media (max-width: 380px) {
+        .resv-card { margin: 14px 10px; }
+        .step { padding: 20px 16px; }
+        .field-row { grid-template-columns: 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+
+    <!-- Cargando -->
+    <div id="screen-loading" class="safe-top safe-bottom">
+      <div class="loading-spinner"></div>
+      <p class="loading-text">Cargando carta…</p>
+    </div>
+
+    <!-- Error -->
+    <div id="screen-error" class="hidden safe-top safe-bottom">
+      <div class="error-icon">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+      <h1 class="error-title">No pudimos cargar</h1>
+      <p id="error-msg" class="error-msg"></p>
+    </div>
+
+    <!-- Principal -->
+    <div id="screen-main" class="hidden safe-bottom">
+
+      <header class="resv-header safe-top">
+        <p class="resv-header-eyebrow" id="hdr-eyebrow">Reservaciones</p>
+        <h1 class="resv-header-title" id="hdr-title">Reservar mesa</h1>
+        <p class="resv-header-sub" id="hdr-sub"></p>
+      </header>
+
+      <div class="resv-card">
+
+        <!-- Indicador de pasos -->
+        <div class="step-dots">
+          <div class="step-dot is-active" id="dot-0"></div>
+          <div class="step-dot" id="dot-1"></div>
+          <div class="step-dot" id="dot-2"></div>
+        </div>
+
+        <!-- PASO 1: Datos de la reserva -->
+        <div class="step is-active" id="step-datos">
+          <h2 class="step-title">Tus datos</h2>
+          <p class="step-sub">Solo necesitamos lo básico para confirmar tu lugar.</p>
+
+          <div class="field">
+            <label for="r-name">Tu nombre *</label>
+            <input id="r-name" type="text" placeholder="Ej: María González" maxlength="100" autocomplete="name" />
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="r-phone">Teléfono</label>
+              <input id="r-phone" type="tel" placeholder="3001234567" maxlength="20" autocomplete="tel" />
+            </div>
+            <div class="field">
+              <label for="r-party">Personas *</label>
+              <input id="r-party" type="number" min="1" max="50" value="2" />
+            </div>
+          </div>
+
+          <div class="field-row">
+            <div class="field">
+              <label for="r-date">Fecha *</label>
+              <input id="r-date" type="date" />
+            </div>
+            <div class="field">
+              <label for="r-time">Hora *</label>
+              <input id="r-time" type="time" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="r-notes">Notas (opcional)</label>
+            <textarea id="r-notes" placeholder="Ej: cumpleaños, silla para bebé, alergias…" maxlength="500"></textarea>
+          </div>
+
+          <div id="err-datos" class="inline-error hidden"></div>
+
+          <button class="btn-primary btn-press" onclick="goToMenu()">
+            Siguiente — elegir platos
+          </button>
+          <button class="btn-secondary btn-press" onclick="skipMenu()">
+            Solo reservar (sin elegir platos)
+          </button>
+        </div>
+
+        <!-- PASO 2: Selección de platos (opcional) -->
+        <div class="step" id="step-menu">
+          <h2 class="menu-section-title">¿Qué van a pedir?</h2>
+          <p class="menu-section-sub">Opcional — podés elegir ahora o pedir cuando llegués.</p>
+
+          <div id="menu-items-list">
+            <!-- Inyectado por JS -->
+          </div>
+
+          <div id="cart-summary-box" class="cart-summary hidden">
+            <p class="cart-summary-title">Tu selección</p>
+            <div id="cart-lines"></div>
+            <div class="cart-total-row">
+              <span>Estimado</span>
+              <span id="cart-total-val"></span>
+            </div>
+          </div>
+
+          <div id="err-menu" class="inline-error hidden"></div>
+
+          <button class="btn-primary btn-press" onclick="sendReservation()">
+            Confirmar reserva
+          </button>
+          <button class="btn-secondary btn-press" onclick="backToForm()">
+            ← Volver
+          </button>
+        </div>
+
+        <!-- PASO 3: Confirmación -->
+        <div class="step" id="step-confirm">
+          <div class="confirm-screen">
+            <div class="confirm-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6L9 17l-5-5"/>
+              </svg>
+            </div>
+            <h2 class="confirm-title" id="confirm-title">¡Reserva enviada!</h2>
+            <p class="confirm-msg" id="confirm-msg"></p>
+            <div class="confirm-detail" id="confirm-detail"></div>
+          </div>
+        </div>
+
+      </div><!-- /resv-card -->
+    </div><!-- /screen-main -->
+
+    <script>
+    (function () {
+      "use strict";
+
+      const API_BASE = (() => {
+        const meta = document.querySelector('meta[name="api-base"]');
+        return ((meta && meta.content) || window.location.origin).replace(/\/+$/, "");
+      })();
+
+      const COP = (n) => new Intl.NumberFormat("es-CO", {
+        style: "currency", currency: "COP", maximumFractionDigits: 0
+      }).format(Number(n) || 0);
+
+      // ── Estado ──────────────────────────────────────────────────────
+      const state = {
+        code: null,
+        destination: null,
+        categories: [],   // [{ id, name, products: [...] }]
+        cart: {},         // { product_id: { name, price, qty } }
+      };
+
+      // ── Utils ───────────────────────────────────────────────────────
+      function $(id) { return document.getElementById(id); }
+
+      function extractCode() {
+        const p = new URLSearchParams(window.location.search);
+        const q = p.get("c") || p.get("code");
+        if (q) return q.trim();
+        const parts = window.location.pathname.replace(/^\/+|\/+$/g, "").split("/");
+        return parts[parts.length - 1] || null;
+      }
+
+      function todayInColombia() {
+        return new Intl.DateTimeFormat("en-CA", {
+          timeZone: "America/Bogota", year: "numeric", month: "2-digit", day: "2-digit"
+        }).format(new Date());
+      }
+
+      function showStep(id) {
+        ["step-datos", "step-menu", "step-confirm"].forEach((s, i) => {
+          const el = $(s);
+          const dot = $(`dot-${i}`);
+          if (s === id) { el.classList.add("is-active"); dot.classList.add("is-active"); }
+          else { el.classList.remove("is-active"); dot.classList.remove("is-active"); }
+        });
+      }
+
+      function showError(msg) {
+        $("screen-loading").style.display = "none";
+        $("screen-error").classList.remove("hidden");
+        $("error-msg").textContent = msg;
+      }
+
+      function escHtml(s) {
+        return String(s)
+          .replace(/&/g,"&amp;").replace(/</g,"&lt;")
+          .replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+      }
+
+      // ── Paso 1 validación ───────────────────────────────────────────
+      function validateForm() {
+        const name  = ($("r-name").value || "").trim();
+        const party = parseInt($("r-party").value || "0", 10);
+        const date  = $("r-date").value || "";
+        const time  = $("r-time").value || "";
+        const errEl = $("err-datos");
+
+        const showErr = (msg) => {
+          errEl.textContent = msg;
+          errEl.classList.remove("hidden");
+          return false;
+        };
+
+        errEl.classList.add("hidden");
+        if (!name)  return showErr("Tu nombre es obligatorio.");
+        if (!date)  return showErr("Elegí una fecha.");
+        if (!time)  return showErr("Elegí una hora.");
+        if (!party || party < 1) return showErr("Indicá cuántas personas serán.");
+        return true;
+      }
+
+      // ── Ir a elegir platos ──────────────────────────────────────────
+      function goToMenu() {
+        if (!validateForm()) return;
+        if (state.categories.length === 0) {
+          // Si no hay carta disponible, saltar directo a enviar
+          skipMenu();
+          return;
+        }
+        renderMenuItems();
+        showStep("step-menu");
+        window.scrollTo(0, 0);
+      }
+
+      // ── Saltar selección de platos ──────────────────────────────────
+      function skipMenu() {
+        if (!validateForm()) return;
+        state.cart = {};
+        sendReservation();
+      }
+
+      function backToForm() {
+        showStep("step-datos");
+        window.scrollTo(0, 0);
+      }
+
+      // ── Renderizar productos ────────────────────────────────────────
+      function renderMenuItems() {
+        const root = $("menu-items-list");
+        root.innerHTML = "";
+
+        state.categories.forEach((cat) => {
+          if (!cat.products.length) return;
+
+          const catEl = document.createElement("p");
+          catEl.className = "cat-label";
+          catEl.textContent = cat.name;
+          root.appendChild(catEl);
+
+          cat.products.forEach((p) => {
+            const row = document.createElement("div");
+            row.className = "prod-item";
+
+            const cartEntry = state.cart[p.id];
+            const qty = cartEntry ? cartEntry.qty : 0;
+
+            row.innerHTML = `
+              <div class="prod-info">
+                <div class="prod-name">${escHtml(p.name)}</div>
+                ${p.description ? `<div class="prod-desc">${escHtml(p.description)}</div>` : ""}
+                <div class="prod-price">${COP(p.effective_price)}</div>
+              </div>
+              <div class="prod-stepper">
+                <button class="stepper-btn btn-press" data-id="${p.id}" data-action="dec" ${qty === 0 ? "disabled" : ""}>−</button>
+                <span class="stepper-val" id="qty-${p.id}">${qty}</span>
+                <button class="stepper-btn btn-press" data-id="${p.id}" data-action="inc">+</button>
+              </div>
+            `;
+            root.appendChild(row);
+          });
+        });
+
+        root.addEventListener("click", (e) => {
+          const btn = e.target.closest("[data-action]");
+          if (!btn) return;
+          const id = btn.dataset.id;
+          const action = btn.dataset.action;
+          // Buscar el producto
+          let prod = null;
+          for (const cat of state.categories) {
+            prod = cat.products.find((p) => p.id === id);
+            if (prod) break;
+          }
+          if (!prod) return;
+
+          const entry = state.cart[id] || { name: prod.name, price: prod.effective_price, qty: 0 };
+          if (action === "inc") entry.qty++;
+          else if (action === "dec" && entry.qty > 0) entry.qty--;
+
+          if (entry.qty > 0) state.cart[id] = entry;
+          else delete state.cart[id];
+
+          // Actualizar contador
+          const qtyEl = $(`qty-${id}`);
+          if (qtyEl) qtyEl.textContent = entry.qty;
+
+          // Habilitar/deshabilitar botón menos
+          const decBtn = root.querySelector(`[data-id="${id}"][data-action="dec"]`);
+          if (decBtn) decBtn.disabled = entry.qty === 0;
+
+          updateCartSummary();
+        });
+
+        updateCartSummary();
+      }
+
+      function updateCartSummary() {
+        const entries = Object.values(state.cart).filter((e) => e.qty > 0);
+        const box = $("cart-summary-box");
+        const linesEl = $("cart-lines");
+        const totalEl = $("cart-total-val");
+
+        if (entries.length === 0) {
+          box.classList.add("hidden");
+          return;
+        }
+
+        let total = 0;
+        linesEl.innerHTML = entries.map((e) => {
+          const sub = e.price * e.qty;
+          total += sub;
+          return `<div class="cart-line">
+            <span class="cart-line-name">${escHtml(e.name)} ×${e.qty}</span>
+            <span class="cart-line-price">${COP(sub)}</span>
+          </div>`;
+        }).join("");
+        totalEl.textContent = COP(total);
+        box.classList.remove("hidden");
+      }
+
+      // ── Enviar reserva ──────────────────────────────────────────────
+      async function sendReservation() {
+        const name  = ($("r-name").value || "").trim();
+        const phone = ($("r-phone").value || "").trim();
+        const party = parseInt($("r-party").value || "0", 10);
+        const date  = $("r-date").value || "";
+        const time  = $("r-time").value || "";
+        const notes = ($("r-notes").value || "").trim();
+
+        const errEl = $("err-menu") || $("err-datos");
+        if (errEl) errEl.classList.add("hidden");
+
+        const reservedFor = `${date}T${time}:00`;
+
+        // Preparar notas combinadas (notas del form + platos elegidos)
+        const cartEntries = Object.values(state.cart).filter((e) => e.qty > 0);
+        let fullNotes = notes;
+        if (cartEntries.length > 0) {
+          const platosStr = cartEntries.map((e) => `${e.qty}x ${e.name}`).join(", ");
+          fullNotes = fullNotes
+            ? `${fullNotes}\n[Platos sugeridos: ${platosStr}]`
+            : `Platos sugeridos: ${platosStr}`;
+        }
+
+        const submitBtn = document.querySelector(".btn-primary");
+        if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Enviando…"; }
+
+        try {
+          const res = await fetch(`${API_BASE}/api/v1/public/reservations`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({
+              code: state.code,
+              customer_name: name,
+              customer_phone: phone || undefined,
+              party_size: party,
+              reserved_for: reservedFor,
+              notes: fullNotes || undefined,
+            }),
+          });
+
+          const body = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            const msg = Array.isArray(body.message) ? body.message[0] : body.message || `Error ${res.status}`;
+            throw new Error(msg);
+          }
+
+          // Mostrar confirmación
+          const fmtDate = new Date(reservedFor).toLocaleString("es-CO", {
+            weekday: "long", day: "numeric", month: "long",
+            hour: "2-digit", minute: "2-digit",
+          });
+
+          $("confirm-msg").innerHTML =
+            `Hola <strong>${escHtml(name)}</strong>, recibimos tu reserva para ` +
+            `<strong>${party} persona${party !== 1 ? "s" : ""}</strong> ` +
+            `el <strong>${fmtDate}</strong>.<br><br>` +
+            `El restaurante te confirmará pronto${phone ? " al " + escHtml(phone) : ""}.`;
+
+          let detailHtml = `
+            <div class="confirm-detail-row">
+              <span class="confirm-detail-key">Nombre</span>
+              <span class="confirm-detail-val">${escHtml(name)}</span>
+            </div>
+            <div class="confirm-detail-row">
+              <span class="confirm-detail-key">Fecha</span>
+              <span class="confirm-detail-val">${fmtDate}</span>
+            </div>
+            <div class="confirm-detail-row">
+              <span class="confirm-detail-key">Personas</span>
+              <span class="confirm-detail-val">${party}</span>
+            </div>`;
+
+          if (cartEntries.length > 0) {
+            detailHtml += `<div class="confirm-detail-row" style="margin-top:8px;border-top:1px solid rgba(139,100,32,0.15);padding-top:8px;">
+              <span class="confirm-detail-key">Platos solicitados</span>
+              <span class="confirm-detail-val">${cartEntries.map((e) => `${e.qty}× ${escHtml(e.name)}`).join(", ")}</span>
+            </div>`;
+          }
+
+          $("confirm-detail").innerHTML = detailHtml;
+
+          showStep("step-confirm");
+          window.scrollTo(0, 0);
+
+        } catch (err) {
+          const errEl2 = $("err-menu") || $("err-datos");
+          if (errEl2) {
+            errEl2.textContent = err.message || "No pudimos enviar la reserva. Intentá de nuevo.";
+            errEl2.classList.remove("hidden");
+          }
+          if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Confirmar reserva"; }
+        }
+      }
+
+      // Exponer funciones para onclick en el HTML
+      window.goToMenu = goToMenu;
+      window.skipMenu = skipMenu;
+      window.backToForm = backToForm;
+      window.sendReservation = sendReservation;
+
+      // ── Boot ─────────────────────────────────────────────────────────
+      async function boot() {
+        const code = extractCode();
+        if (!code) {
+          showError("Falta el código del QR. Pedile el enlace al restaurante.");
+          return;
+        }
+        state.code = code;
+
+        // Fecha mínima = hoy en Colombia
+        const today = todayInColombia();
+        if ($("r-date")) $("r-date").min = today;
+
+        try {
+          const res = await fetch(`${API_BASE}/api/v1/public/menu/${code}`, {
+            headers: { Accept: "application/json" },
+          });
+
+          if (!res.ok) {
+            const b = await res.json().catch(() => ({}));
+            throw Object.assign(new Error(b.message || `HTTP ${res.status}`), { status: res.status });
+          }
+
+          const data = await res.json();
+          const payload = data.data || data;
+
+          state.destination = payload.destination || null;
+
+          // Agrupar productos por categoría
+          const rawCats = payload.categories || [];
+          const rawProds = payload.products || [];
+          const bycat = new Map();
+          for (const p of rawProds) {
+            const arr = bycat.get(p.category_id) || [];
+            arr.push(p);
+            bycat.set(p.category_id, arr);
+          }
+          state.categories = rawCats
+            .map((c) => ({ ...c, products: bycat.get(c.id) || [] }))
+            .filter((c) => c.products.length > 0);
+
+          // Header
+          const destLabel = state.destination?.label || "";
+          $("hdr-eyebrow").textContent = "Reservaciones";
+          $("hdr-title").textContent = "Reservar mesa";
+          if (destLabel) $("hdr-sub").textContent = destLabel;
+          document.title = `Reservar — ${destLabel || "Carta"}`;
+
+          // Ocultar pantalla de carga
+          $("screen-loading").style.display = "none";
+          $("screen-main").classList.remove("hidden");
+
+        } catch (err) {
+          const msgs = {
+            404: "Este código QR no es válido.",
+            410: "Este código QR ya no está activo.",
+            429: "Demasiadas peticiones. Esperá un momento.",
+          };
+          showError(msgs[err.status] || err.message || "No pudimos cargar. Intentá de nuevo.");
+        }
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", boot);
+      } else {
+        boot();
+      }
+    })();
+    </script>
+  </body>
+</html>

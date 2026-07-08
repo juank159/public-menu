@@ -299,6 +299,9 @@
   // ---------------------------------------------------------------
   function renderHeader() {
     const label = state.destination?.label || "Carta digital";
+    // El backend no expone tenant.name en /public/menu (deliberado:
+    // menos info filtrada sin auth). Si querés ese branding, agregar
+    // al response del backend y leerlo acá.
     $("tenant-name").textContent =
       state.destination?.type === "table"
         ? "Mesa"
@@ -309,15 +312,6 @@
             : "Carta";
     $("qr-label").textContent = label;
     document.title = `${label} — Carta`;
-
-    // Mostrar botones de acción y configurar link del PDF
-    const actionsBar = $("menu-header-actions");
-    if (actionsBar) actionsBar.classList.remove("hidden");
-
-    const pdfLink = $("pdf-download-link");
-    if (pdfLink && state.code) {
-      pdfLink.href = `${API_BASE}/api/v1/public/menu/${encodeURIComponent(state.code)}/pdf`;
-    }
   }
 
   function renderTabs() {
@@ -1843,158 +1837,6 @@
       if (banner) banner.classList.add("hidden");
       showScreen("screen-tracking");
       startTracking(orderNumber);
-    },
-
-    // ── Reserva de mesa ─────────────────────────────────────────────
-    openReservation() {
-      const modal = $("modal-reservation");
-      const content = $("reservation-content");
-      if (!modal || !content) return;
-
-      // Fecha mínima = hoy en Colombia
-      const minDate = todayInColombia();
-
-      content.innerHTML = `
-        <div class="resv-modal-header">
-          <h2 class="resv-modal-title">Reservar mesa</h2>
-          <button class="resv-modal-close btn-press" onclick="App.closeReservation()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
-        </div>
-
-        <div class="resv-form-group">
-          <label class="resv-label" for="resv-name">Tu nombre *</label>
-          <input id="resv-name" class="resv-input" type="text" placeholder="Ej: María González" maxlength="100" />
-        </div>
-
-        <div class="resv-input-row">
-          <div class="resv-form-group">
-            <label class="resv-label" for="resv-phone">Teléfono</label>
-            <input id="resv-phone" class="resv-input" type="tel" placeholder="Ej: 3001234567" maxlength="20" />
-          </div>
-          <div class="resv-form-group">
-            <label class="resv-label" for="resv-party">Personas *</label>
-            <input id="resv-party" class="resv-input" type="number" placeholder="2" min="1" max="50" value="2" />
-          </div>
-        </div>
-
-        <div class="resv-input-row">
-          <div class="resv-form-group">
-            <label class="resv-label" for="resv-date">Fecha *</label>
-            <input id="resv-date" class="resv-input" type="date" min="${minDate}" />
-          </div>
-          <div class="resv-form-group">
-            <label class="resv-label" for="resv-time">Hora *</label>
-            <input id="resv-time" class="resv-input" type="time" />
-          </div>
-        </div>
-
-        <div class="resv-form-group">
-          <label class="resv-label" for="resv-notes">Notas (opcional)</label>
-          <input id="resv-notes" class="resv-input" type="text" placeholder="Ej: Cumpleaños, sin cebolla..." maxlength="500" />
-        </div>
-
-        <div id="resv-error" class="resv-error"></div>
-
-        <button id="resv-submit" class="resv-submit btn-press" onclick="App.submitReservation()">
-          Confirmar reserva
-        </button>
-      `;
-
-      modal.classList.remove("hidden");
-      setTimeout(() => {
-        const nameInput = document.getElementById("resv-name");
-        if (nameInput) nameInput.focus();
-      }, 120);
-    },
-
-    closeReservation(e) {
-      if (e && e.target !== $("modal-reservation")) return;
-      $("modal-reservation")?.classList.add("hidden");
-    },
-
-    async submitReservation() {
-      const name = (document.getElementById("resv-name")?.value || "").trim();
-      const phone = (document.getElementById("resv-phone")?.value || "").trim();
-      const party = parseInt(document.getElementById("resv-party")?.value || "2", 10);
-      const date = document.getElementById("resv-date")?.value || "";
-      const time = document.getElementById("resv-time")?.value || "";
-      const notes = (document.getElementById("resv-notes")?.value || "").trim();
-
-      const errEl = $("resv-error");
-      const submitBtn = $("resv-submit");
-
-      const showErr = (msg) => {
-        if (errEl) { errEl.textContent = msg; errEl.style.display = "block"; }
-      };
-
-      if (errEl) errEl.style.display = "none";
-
-      if (!name) return showErr("Tu nombre es obligatorio.");
-      if (!date) return showErr("Elegí una fecha.");
-      if (!time) return showErr("Elegí una hora.");
-      if (!party || party < 1) return showErr("Indicá cuántas personas serán.");
-
-      const reservedFor = `${date}T${time}:00`;
-
-      if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = "Enviando…"; }
-
-      try {
-        const res = await fetch(`${API_BASE}/api/v1/public/reservations`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
-          body: JSON.stringify({
-            code: state.code,
-            customer_name: name,
-            customer_phone: phone || undefined,
-            party_size: party,
-            reserved_for: reservedFor,
-            notes: notes || undefined,
-          }),
-        });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          const msg = Array.isArray(body.message)
-            ? body.message[0]
-            : body.message || `Error ${res.status}`;
-          throw new Error(msg);
-        }
-
-        // Éxito — mostrar confirmación
-        const content = $("reservation-content");
-        if (content) {
-          const fmtDate = new Date(`${date}T${time}:00`).toLocaleString("es-CO", {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-            hour: "2-digit",
-            minute: "2-digit",
-          });
-          content.innerHTML = `
-            <div class="resv-success">
-              <div class="resv-success-icon">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M20 6L9 17l-5-5"/>
-                </svg>
-              </div>
-              <h3 class="resv-success-title">¡Reserva enviada!</h3>
-              <p class="resv-success-msg">
-                Hola ${escapeHtml(name)}, recibimos tu reserva para <strong>${party} persona${party !== 1 ? "s" : ""}</strong>
-                el <strong>${fmtDate}</strong>.<br><br>
-                El restaurante la confirmará pronto.
-              </p>
-              <button class="resv-success-btn btn-press" onclick="$('modal-reservation').classList.add('hidden')">
-                Cerrar
-              </button>
-            </div>
-          `;
-        }
-      } catch (err) {
-        showErr(err.message || "No pudimos enviar la reserva. Intentá de nuevo.");
-        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = "Confirmar reserva"; }
-      }
     },
   };
 
