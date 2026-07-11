@@ -950,12 +950,13 @@
   let modalProductState = null;
 
   /// HTML del selector de cremas según la variante elegida. Una fila por
-  /// bola (con repetidos permitidos). Vacío si la variante no pide cremas.
+  /// bola cuando hay 1 unidad; tarjetas por unidad cuando hay varias.
   function flavorSectionHtml() {
     if (!modalProductState) return "";
-    const scoops = modalProductState.selectedFlavors.length;
-    if (scoops <= 0) return "";
-    const flavors = modalProductState.categoryFlavors;
+    const { selectedFlavors, quantity, categoryFlavors, scoopCount } =
+      modalProductState;
+    if (!scoopCount || scoopCount <= 0) return "";
+    const flavors = categoryFlavors;
 
     if (flavors.length === 0) {
       return `
@@ -963,10 +964,8 @@
         <p class="pm-flavor-empty">Todavía no hay cremas cargadas. Pedíselas.</p>`;
     }
 
-    const slots = [];
-    for (let i = 0; i < scoops; i++) {
-      const sel = modalProductState.selectedFlavors[i] || "";
-      const options = [
+    const buildOptions = (sel) =>
+      [
         `<option value="">Elegí…</option>`,
         ...flavors.map(
           (f) =>
@@ -975,18 +974,49 @@
             }>${escapeHtml(f.name)}</option>`,
         ),
       ].join("");
-      slots.push(`
-        <div class="pm-flavor-slot">
-          <span class="pm-flavor-num">Bola ${i + 1}</span>
-          <select class="pm-flavor-select" data-slot="${i}"
-                  onchange="App.selectFlavor(${i}, this.value)">
-            ${options}
-          </select>
+
+    // Una sola unidad: layout plano (Bola 1, Bola 2…)
+    if (quantity <= 1) {
+      const slots = [];
+      for (let i = 0; i < scoopCount; i++) {
+        slots.push(`
+          <div class="pm-flavor-slot">
+            <span class="pm-flavor-num">Bola ${i + 1}</span>
+            <select class="pm-flavor-select" data-slot="${i}"
+                    onchange="App.selectFlavor(${i}, this.value)">
+              ${buildOptions(selectedFlavors[i] || "")}
+            </select>
+          </div>`);
+      }
+      return `
+        <div class="pm-section-label">Elegí tus cremas (${scoopCount})</div>
+        <div class="pm-flavors">${slots.join("")}</div>`;
+    }
+
+    // Múltiples unidades: tarjeta por unidad
+    const unitCards = [];
+    for (let unit = 0; unit < quantity; unit++) {
+      const slots = [];
+      for (let s = 0; s < scoopCount; s++) {
+        const absSlot = unit * scoopCount + s;
+        slots.push(`
+          <div class="pm-flavor-slot">
+            <span class="pm-flavor-num">Bola ${s + 1}</span>
+            <select class="pm-flavor-select" data-slot="${absSlot}"
+                    onchange="App.selectFlavor(${absSlot}, this.value)">
+              ${buildOptions(selectedFlavors[absSlot] || "")}
+            </select>
+          </div>`);
+      }
+      unitCards.push(`
+        <div class="pm-unit-card">
+          <div class="pm-unit-label">Unidad ${unit + 1}</div>
+          <div class="pm-flavors">${slots.join("")}</div>
         </div>`);
     }
     return `
-      <div class="pm-section-label">Elegí tus cremas (${scoops})</div>
-      <div class="pm-flavors">${slots.join("")}</div>`;
+      <div class="pm-section-label">Elegí las cremas (${scoopCount} por unidad)</div>
+      <div class="pm-unit-cards">${unitCards.join("")}</div>`;
   }
 
   function renderProductModal(product) {
@@ -1026,6 +1056,7 @@
       special_instructions: "",
       unit_price: unitPrice,
       categoryFlavors,
+      scoopCount: initialScoops,
       selectedFlavors: new Array(initialScoops).fill(""),
     };
 
@@ -1561,9 +1592,12 @@
       });
 
       // La cantidad de cremas depende de la variante (bolas). Reajustamos
-      // los slots y re-renderizamos el selector de cremas.
+      // los slots (por unidad) y re-renderizamos el selector de cremas.
       const scoops = variant.scoopCount || 0;
-      modalProductState.selectedFlavors = new Array(scoops).fill("");
+      modalProductState.scoopCount = scoops;
+      modalProductState.selectedFlavors = new Array(
+        scoops * modalProductState.quantity,
+      ).fill("");
       const flavorsBox = $("prod-flavors");
       if (flavorsBox) flavorsBox.innerHTML = flavorSectionHtml();
 
@@ -1587,6 +1621,21 @@
       modalProductState.quantity = next;
       $("prod-qty").textContent = String(next);
       $("prod-total").textContent = fmt(modalProductState.unit_price * next);
+      const sc = modalProductState.scoopCount || 0;
+      if (sc > 0) {
+        const needed = next * sc;
+        const cur = modalProductState.selectedFlavors;
+        if (cur.length < needed) {
+          modalProductState.selectedFlavors = [
+            ...cur,
+            ...new Array(needed - cur.length).fill(""),
+          ];
+        } else if (cur.length > needed) {
+          modalProductState.selectedFlavors = cur.slice(0, needed);
+        }
+        const flavorsBox = $("prod-flavors");
+        if (flavorsBox) flavorsBox.innerHTML = flavorSectionHtml();
+      }
     },
 
     updateNotes(value) {
@@ -1634,25 +1683,57 @@
         selectedVariantIdx,
         selectedFlavors,
         categoryFlavors,
+        scoopCount,
       } = modalProductState;
 
       const variant =
         selectedVariantIdx >= 0 ? variants[selectedVariantIdx] : null;
 
-      // Cremas: todas las bolas deben tener sabor elegido.
-      const scoops = selectedFlavors.length;
+      // Cremas: todas las bolas (todas las unidades) deben tener sabor.
+      const scoops = scoopCount || 0;
       if (scoops > 0) {
         if (categoryFlavors.length === 0) {
           App.toast("Este producto necesita cremas y aún no hay cargadas.");
           return;
         }
         if (selectedFlavors.some((f) => !f)) {
-          App.toast(`Elegí las ${scoops} cremas antes de agregar.`);
+          App.toast(
+            quantity > 1
+              ? "Elegí las cremas de cada unidad antes de agregar."
+              : `Elegí las ${scoops} cremas antes de agregar.`,
+          );
           return;
         }
       }
 
-      // Nombres de las cremas para mostrar en el carrito (en orden de bola).
+      // Múltiples unidades con cremas: un ítem de carrito por unidad.
+      if (scoops > 0 && quantity > 1) {
+        for (let unit = 0; unit < quantity; unit++) {
+          const start = unit * scoops;
+          const unitFlavors = selectedFlavors.slice(start, start + scoops);
+          const unitFlavorNames = unitFlavors.map((id) => {
+            const f = categoryFlavors.find((x) => x.id === id);
+            return f ? f.name : "";
+          });
+          addLine({
+            product_id: product.id,
+            variant_id: variant ? variant.id : undefined,
+            variant_name: variant ? variant.name : "",
+            name: product.name,
+            unit_price,
+            quantity: 1,
+            special_instructions: special_instructions || "",
+            flavor_ids: [...unitFlavors],
+            flavor_names: unitFlavorNames,
+          });
+        }
+        persistCart();
+        renderCartFab();
+        App.closeProduct(true);
+        return;
+      }
+
+      // Caso estándar: un ítem con la cantidad pedida.
       const flavorNames = selectedFlavors.map((id) => {
         const f = categoryFlavors.find((x) => x.id === id);
         return f ? f.name : "";
