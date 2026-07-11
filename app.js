@@ -1714,8 +1714,14 @@
       errEl.classList.add("hidden");
 
       if (name.length < 2) {
-        errEl.textContent = "Ingresá tu nombre.";
-        errEl.classList.remove("hidden");
+        App.toast("Completa tu nombre para continuar con el pedido.");
+        const nameEl = $("cust-name");
+        if (nameEl) {
+          nameEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          nameEl.focus();
+          nameEl.classList.add("cart-input--error");
+          setTimeout(() => nameEl.classList.remove("cart-input--error"), 2500);
+        }
         return;
       }
       // Teléfono OPCIONAL: solo validamos el formato si el cliente
@@ -1749,6 +1755,7 @@
           items: state.cart.map((it) => ({
             product_id: it.product_id,
             variant_id: it.variant_id || undefined,
+            variant_name: it.variant_name || undefined,
             quantity: it.quantity,
             special_instructions: it.special_instructions || undefined,
             flavor_ids:

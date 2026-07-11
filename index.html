@@ -1374,6 +1374,8 @@
         color: var(--ink-primary);
       }
       .cart-input:focus { outline: none; border-color: var(--gold-dark); }
+      .cart-input--error { border-color: #b03030 !important; box-shadow: 0 0 0 3px rgba(176,48,48,0.18); animation: shake .35s; }
+      @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
       .cart-submit {
         width: 100%;
         margin-top: 18px;
