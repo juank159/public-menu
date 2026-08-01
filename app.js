@@ -67,6 +67,9 @@
     // pedido anterior; la nueva orden se adjunta a la misma tab.
     activeTabSessionId: null,
     activeCustomerName: null,
+    // Banner de promoción configurable desde la app admin.
+    // { enabled, image_url, title, subtitle, display_seconds }
+    promoBanner: null,
   };
 
   // ---------------------------------------------------------------
@@ -2027,6 +2030,128 @@
   // ---------------------------------------------------------------
   // Boot
   // ---------------------------------------------------------------
+  // ── Banner de Promoción ─────────────────────────────────────────────
+
+  function maybeShowPromoBanner() {
+    const b = state.promoBanner;
+    if (!b || !b.enabled || !b.image_url) return;
+
+    // Solo una vez por sesión de navegador (se borra al cerrar la pestaña).
+    const seenKey = `promo_shown:${state.code}`;
+    try {
+      if (sessionStorage.getItem(seenKey)) return;
+      sessionStorage.setItem(seenKey, "1");
+    } catch (_) {}
+
+    // Pequeño delay para que el menú ya sea visible antes de la promo.
+    setTimeout(() => _renderPromoBanner(b), 320);
+  }
+
+  function _renderPromoBanner(b) {
+    // Crear overlay
+    const overlay = document.createElement("div");
+    overlay.id = "promo-overlay";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-label", b.title || "Promoción");
+
+    // Barra de progreso (solo si hay auto-dismiss)
+    const hasCd = b.display_seconds > 0;
+    const progressHtml = hasCd
+      ? `<div class="promo-progress-bar">
+           <div class="promo-progress-fill" id="promo-progress-fill"></div>
+         </div>`
+      : "";
+
+    // Cuerpo de texto (solo si hay título o subtítulo)
+    const hasText = (b.title && b.title.trim()) || (b.subtitle && b.subtitle.trim());
+    const bodyHtml = hasText
+      ? `<div class="promo-body">
+           ${b.title ? `<p class="promo-title">${_escHtml(b.title)}</p>` : ""}
+           ${b.subtitle ? `<p class="promo-subtitle">${_escHtml(b.subtitle)}</p>` : ""}
+         </div>`
+      : "";
+
+    overlay.innerHTML = `
+      <div class="promo-card">
+        <button class="promo-close-btn" id="promo-close-btn" aria-label="Cerrar">✕</button>
+        <div class="promo-img-wrap">
+          <img src="${_escAttr(b.image_url)}" alt="${_escAttr(b.title || 'Promoción')}" loading="eager" />
+        </div>
+        ${bodyHtml}
+        ${progressHtml}
+      </div>`;
+
+    document.body.appendChild(overlay);
+
+    // Cerrar al hacer click en el overlay (fuera de la card)
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) _dismissPromoBanner(overlay);
+    });
+    document.getElementById("promo-close-btn").addEventListener("click", () => {
+      _dismissPromoBanner(overlay);
+    });
+    // Cerrar con Escape
+    const onKey = (e) => {
+      if (e.key === "Escape") { _dismissPromoBanner(overlay); document.removeEventListener("keydown", onKey); }
+    };
+    document.addEventListener("keydown", onKey);
+
+    // Animación de entrada
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => overlay.classList.add("promo-visible"));
+    });
+
+    // Auto-dismiss con barra de progreso
+    if (hasCd) {
+      const fill = document.getElementById("promo-progress-fill");
+      const ms = b.display_seconds * 1000;
+      let start = null;
+      let raf = null;
+
+      function tick(ts) {
+        if (!start) start = ts;
+        const elapsed = ts - start;
+        const pct = Math.min(elapsed / ms, 1);
+        // La barra va de 100% → 0% (muestra tiempo restante)
+        fill.style.transform = `scaleX(${1 - pct})`;
+        if (pct < 1) {
+          raf = requestAnimationFrame(tick);
+        } else {
+          _dismissPromoBanner(overlay);
+        }
+      }
+      raf = requestAnimationFrame(tick);
+
+      // Si el usuario cierra manualmente antes, cancelamos el RAF.
+      overlay.addEventListener("promo-dismiss", () => {
+        if (raf) cancelAnimationFrame(raf);
+      }, { once: true });
+    }
+  }
+
+  function _dismissPromoBanner(overlay) {
+    if (!overlay || overlay.classList.contains("promo-hiding")) return;
+    overlay.dispatchEvent(new CustomEvent("promo-dismiss"));
+    overlay.classList.remove("promo-visible");
+    overlay.classList.add("promo-hiding");
+    setTimeout(() => overlay.remove(), 380);
+  }
+
+  function _escHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  function _escAttr(str) {
+    return String(str).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+
+  // ── Fin Banner de Promoción ─────────────────────────────────────────
+
   async function boot() {
     const code = extractCode();
     if (!code) {
@@ -2058,6 +2183,7 @@
 
       state.destination = payload.destination || null;
       state.emptyReason = payload.empty_reason || null;
+      state.promoBanner = payload.promo_banner || null;
 
       // Cremas/sabores disponibles (para productos de heladería).
       state.flavors = payload.flavors || [];
@@ -2091,6 +2217,9 @@
       renderCartFab();
 
       showScreen("screen-menu");
+
+      // ── Banner de promoción (una vez por sesión de navegador) ────
+      maybeShowPromoBanner();
 
       // ── Bienvenida a cliente recurrente ─────────────────────────
       // Verificar si tiene una cuenta activa (pedido previo < 8h).

@@ -1266,6 +1266,113 @@
         margin-bottom: 8px;
       }
 
+      /* ── Banner de Promoción (splash al abrir el menú QR) ────────── */
+      #promo-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: rgba(0,0,0,0.72);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        opacity: 0;
+        transition: opacity 0.35s ease;
+      }
+      #promo-overlay.promo-visible { opacity: 1; }
+      #promo-overlay.promo-hiding  { opacity: 0; pointer-events: none; }
+
+      .promo-card {
+        position: relative;
+        background: #fff;
+        border-radius: 20px;
+        overflow: hidden;
+        max-width: 440px;
+        width: 100%;
+        max-height: 88vh;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+        transform: scale(0.88);
+        transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
+      }
+      #promo-overlay.promo-visible .promo-card { transform: scale(1); }
+      #promo-overlay.promo-hiding  .promo-card { transform: scale(0.92); }
+
+      .promo-img-wrap {
+        flex: 1;
+        overflow: hidden;
+        min-height: 180px;
+        max-height: 65vh;
+        background: #f0ece6;
+      }
+      .promo-img-wrap img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+
+      .promo-body {
+        padding: 18px 20px 14px;
+        background: #fff;
+      }
+      .promo-title {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 22px;
+        font-weight: 700;
+        color: var(--ink-dark, #2c1a0e);
+        margin: 0 0 4px;
+        line-height: 1.2;
+      }
+      .promo-subtitle {
+        font-family: 'Inter', sans-serif;
+        font-size: 13px;
+        color: var(--ink-muted, #7a6652);
+        margin: 0;
+        line-height: 1.4;
+      }
+
+      .promo-close-btn {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        background: rgba(0,0,0,0.45);
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 18px;
+        line-height: 1;
+        transition: background 0.15s;
+        padding: 0;
+        z-index: 2;
+      }
+      .promo-close-btn:hover { background: rgba(0,0,0,0.68); }
+
+      .promo-progress-bar {
+        height: 4px;
+        background: #e8e0d8;
+        position: relative;
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+      .promo-progress-fill {
+        position: absolute;
+        inset: 0 auto 0 0;
+        height: 100%;
+        background: var(--gold-dark, #8b5e1f);
+        width: 100%;
+        transform-origin: left center;
+      }
+
       /* Toast no bloqueante */
       .app-toast {
         position: fixed;
