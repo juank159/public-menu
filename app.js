@@ -72,6 +72,12 @@
     promoBanner: null,
   };
 
+  // Flag de página: true si el banner ya se mostró en esta carga del documento.
+  // Se resetea automáticamente en cada nueva navegación (escanear el QR, recargar
+  // la página). NO usar sessionStorage: los móviles conservan las pestañas en
+  // background y sessionStorage persiste, bloqueando el banner para siempre.
+  let _promoShownThisLoad = false;
+
   // ---------------------------------------------------------------
   // Utils
   // ---------------------------------------------------------------
@@ -2055,12 +2061,9 @@
     const b = state.promoBanner;
     if (!b || !b.enabled || !b.image_url) return;
 
-    // Solo una vez por sesión de navegador (se borra al cerrar la pestaña).
-    const seenKey = `promo_shown:${state.code}`;
-    try {
-      if (sessionStorage.getItem(seenKey)) return;
-      sessionStorage.setItem(seenKey, "1");
-    } catch (_) {}
+    // Solo una vez por carga de página (el flag se resetea con cada navegación).
+    if (_promoShownThisLoad) return;
+    _promoShownThisLoad = true;
 
     // Pequeño delay para que el menú ya sea visible antes de la promo.
     setTimeout(() => _renderPromoBanner(b), 320);
@@ -2237,7 +2240,7 @@
 
       showScreen("screen-menu");
 
-      // ── Banner de promoción (una vez por sesión de navegador) ────
+      // ── Banner de promoción (una vez por carga de página) ──────────
       maybeShowPromoBanner();
 
       // ── Bienvenida a cliente recurrente ─────────────────────────
