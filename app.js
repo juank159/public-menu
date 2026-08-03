@@ -68,8 +68,10 @@
     activeTabSessionId: null,
     activeCustomerName: null,
     // Banner de promoción configurable desde la app admin.
-    // { enabled, image_url, title, subtitle, display_seconds }
+    // { enabled, image_url, title, subtitle, display_seconds, linked_product_id }
     promoBanner: null,
+    // Lista plana de todos los productos del menú (para lookup rápido en el banner).
+    products: [],
   };
 
   // Flag de página: true si el banner ya se mostró en esta carga del documento.
@@ -852,6 +854,7 @@
     // — el "paper" es la página del libro, así que cualquier card flota.
     const card = document.createElement("div");
     card.className = "menu-item btn-press";
+    card.dataset.productId = product.id; // permite al banner encontrar la card
     card.onclick = () => App.openProduct(product);
 
     const hasImage = !!product.image_url;
@@ -2070,6 +2073,11 @@
   }
 
   function _renderPromoBanner(b) {
+    // Resolver producto vinculado (si existe y está en el menú de hoy).
+    const linkedProduct = b.linked_product_id
+      ? state.products.find((p) => p.id === b.linked_product_id) || null
+      : null;
+
     // Crear overlay
     const overlay = document.createElement("div");
     overlay.id = "promo-overlay";
@@ -2077,8 +2085,9 @@
     overlay.setAttribute("aria-modal", "true");
     overlay.setAttribute("aria-label", b.title || "Promoción");
 
-    // Barra de progreso (solo si hay auto-dismiss)
-    const hasCd = b.display_seconds > 0;
+    // Barra de progreso (solo si hay auto-dismiss Y no hay CTA de producto,
+    // porque el CTA es suficiente acción clara para el cliente).
+    const hasCd = b.display_seconds > 0 && !linkedProduct;
     const progressHtml = hasCd
       ? `<div class="promo-progress-bar">
            <div class="promo-progress-fill" id="promo-progress-fill"></div>
@@ -2094,13 +2103,25 @@
          </div>`
       : "";
 
+    // CTA de producto vinculado
+    const ctaHtml = linkedProduct
+      ? `<button class="promo-cta" id="promo-cta-btn" aria-label="Agregar ${_escAttr(linkedProduct.name)} al carrito">
+           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+             <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+             <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+           </svg>
+           <span class="promo-cta-name">${_escHtml(linkedProduct.name)}</span>
+         </button>`
+      : "";
+
     overlay.innerHTML = `
       <div class="promo-card">
         <button class="promo-close-btn" id="promo-close-btn" aria-label="Cerrar">✕</button>
         <div class="promo-img-wrap">
-          <img src="${_escAttr(b.image_url)}" alt="${_escAttr(b.title || 'Promoción')}" loading="eager" />
+          <img src="${_escAttr(b.image_url)}" alt="${_escAttr(b.title || 'Promoción')}" loading="eager" fetchpriority="high" />
         </div>
         ${bodyHtml}
+        ${ctaHtml}
         ${progressHtml}
       </div>`;
 
@@ -2118,6 +2139,14 @@
       if (e.key === "Escape") { _dismissPromoBanner(overlay); document.removeEventListener("keydown", onKey); }
     };
     document.addEventListener("keydown", onKey);
+
+    // CTA de producto vinculado: cerrar banner → navegar a la categoría → abrir modal
+    if (linkedProduct) {
+      document.getElementById("promo-cta-btn").addEventListener("click", () => {
+        _dismissPromoBanner(overlay);
+        _navigateToLinkedProduct(linkedProduct);
+      });
+    }
 
     // Animación de entrada
     requestAnimationFrame(() => {
@@ -2158,6 +2187,47 @@
     overlay.classList.remove("promo-visible");
     overlay.classList.add("promo-hiding");
     setTimeout(() => overlay.remove(), 380);
+  }
+
+  /**
+   * Después de cerrar el banner, navega a la página del libro donde vive
+   * el producto vinculado y luego abre su modal de compra.
+   */
+  function _navigateToLinkedProduct(product) {
+    const catIdx = state.categories.findIndex((c) =>
+      c.products.some((p) => p.id === product.id),
+    );
+
+    if (catIdx < 0) {
+      // Producto no disponible hoy (no está en ninguna categoría activa)
+      setTimeout(() => App.toast("Producto no disponible hoy en el menú"), 420);
+      return;
+    }
+
+    const pageIdx = catIdx + 1; // 0 = portada, 1..N = categorías
+
+    const openModal = () => {
+      // Destacar brevemente la card antes de abrir el modal
+      const card = document.querySelector(
+        `[data-product-id="${CSS.escape(product.id)}"]`,
+      );
+      if (card) {
+        card.classList.add("promo-highlight");
+        setTimeout(() => card.classList.remove("promo-highlight"), 1400);
+      }
+      App.openProduct(product);
+    };
+
+    // Si ya estamos en esa página, abrir modal directo; si no, navegar primero.
+    setTimeout(() => {
+      if (state.bookIndex === pageIdx) {
+        openModal();
+      } else {
+        goToPage(pageIdx);
+        // Esperar la animación de vuelta de página (~600ms)
+        setTimeout(openModal, 680);
+      }
+    }, 420); // esperar que el banner termine de cerrarse
   }
 
   function _escHtml(str) {
@@ -2214,6 +2284,13 @@
       // razones de tamaño de payload — frontend lo arma).
       const rawCats = payload.categories || [];
       const rawProducts = payload.products || [];
+      state.products = rawProducts; // lista plana para lookup del banner
+
+      // Precargar la imagen del banner inmediatamente: así cuando aparece
+      // (320ms después) ya está en caché y se ve instantánea.
+      if (state.promoBanner?.image_url) {
+        new Image().src = state.promoBanner.image_url;
+      }
       const productsByCategory = new Map();
       for (const p of rawProducts) {
         const arr = productsByCategory.get(p.category_id) || [];

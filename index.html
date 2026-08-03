@@ -1357,6 +1357,46 @@
       }
       .promo-close-btn:hover { background: rgba(0,0,0,0.68); }
 
+      /* Botón CTA de producto vinculado */
+      .promo-cta {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        width: 100%;
+        padding: 16px 20px;
+        background: var(--gold-dark, #8b5e1f);
+        color: #fff;
+        border: none;
+        cursor: pointer;
+        font-size: 15px;
+        font-weight: 700;
+        font-family: 'Inter', sans-serif;
+        letter-spacing: 0.2px;
+        flex-shrink: 0;
+        transition: background 0.15s, transform 0.1s;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .promo-cta:hover  { background: #7a5018; }
+      .promo-cta:active { transform: scale(0.98); }
+      .promo-cta-name {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 200px;
+      }
+
+      /* Destello breve en la card del producto al llegar desde el banner */
+      @keyframes promoHighlight {
+        0%   { box-shadow: 0 0 0 0 rgba(139,94,31,0.7); }
+        50%  { box-shadow: 0 0 0 8px rgba(139,94,31,0.3); }
+        100% { box-shadow: 0 0 0 0 rgba(139,94,31,0); }
+      }
+      .promo-highlight {
+        animation: promoHighlight 1.4s ease-out;
+        border-radius: 8px;
+      }
+
       .promo-progress-bar {
         height: 4px;
         background: #e8e0d8;
