@@ -1535,6 +1535,25 @@
     }
   }
 
+  // Pausa el polling cuando la pestaña queda en segundo plano y lo
+  // reanuda al volver — ahorra batería y datos móviles del cliente.
+  (function _setupVisibilityPolling() {
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) {
+        // Oculta: pausar sin perder el orderNumber
+        if (state.trackingTimer) {
+          clearInterval(state.trackingTimer);
+          state.trackingTimer = null;
+        }
+      } else {
+        // Visible: reanudar si hay un pedido en seguimiento
+        if (state.trackedOrderNumber && !state.trackingTimer) {
+          startTracking(state.trackedOrderNumber);
+        }
+      }
+    });
+  })();
+
   // ---------------------------------------------------------------
   // Public API (expuesta para onclick handlers en el HTML)
   // ---------------------------------------------------------------
