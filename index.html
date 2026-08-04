@@ -1357,40 +1357,58 @@
       }
       .promo-close-btn:hover { background: rgba(0,0,0,0.68); }
 
-      /* Botón CTA de producto vinculado */
-      .promo-cta {
+      /* Contenedor centrado del botón CTA — no pega al borde */
+      .promo-cta-wrap {
         display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 20px 24px 24px;
+        background: #fff;
+        flex-shrink: 0;
+      }
+
+      /* Botón CTA de producto vinculado — píldora flotante elegante */
+      .promo-cta {
+        display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 10px;
-        width: 100%;
-        padding: 16px 20px;
-        background: var(--gold-dark, #8b5e1f);
+        padding: 16px 36px;
+        background: linear-gradient(135deg, #FF416C 0%, #FF6B35 100%);
         color: #fff;
         border: none;
+        border-radius: 50px;
         cursor: pointer;
-        font-size: 15px;
-        font-weight: 700;
+        font-size: 16px;
+        font-weight: 800;
         font-family: 'Inter', sans-serif;
-        letter-spacing: 0.2px;
-        flex-shrink: 0;
-        transition: background 0.15s, transform 0.1s;
+        letter-spacing: 0.5px;
+        min-width: 210px;
+        box-shadow: 0 6px 22px rgba(255,65,108,0.48), 0 2px 6px rgba(0,0,0,0.14);
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+        animation: promoCTAFloat 2.2s ease-in-out infinite;
         -webkit-tap-highlight-color: transparent;
       }
-      .promo-cta:hover  { background: #7a5018; }
-      .promo-cta:active { transform: scale(0.98); }
-      .promo-cta-name {
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        max-width: 200px;
+      .promo-cta:hover {
+        transform: translateY(-3px) scale(1.03);
+        box-shadow: 0 12px 32px rgba(255,65,108,0.62), 0 3px 10px rgba(0,0,0,0.18);
+        animation: none;
+      }
+      .promo-cta:active {
+        transform: scale(0.96);
+        box-shadow: 0 4px 12px rgba(255,65,108,0.38);
+        animation: none;
+      }
+      @keyframes promoCTAFloat {
+        0%, 100% { transform: translateY(0); }
+        50%      { transform: translateY(-5px); }
       }
 
       /* Destello breve en la card del producto al llegar desde el banner */
       @keyframes promoHighlight {
-        0%   { box-shadow: 0 0 0 0 rgba(139,94,31,0.7); }
-        50%  { box-shadow: 0 0 0 8px rgba(139,94,31,0.3); }
-        100% { box-shadow: 0 0 0 0 rgba(139,94,31,0); }
+        0%   { box-shadow: 0 0 0 0 rgba(255,65,108,0.7); }
+        50%  { box-shadow: 0 0 0 10px rgba(255,65,108,0.28); }
+        100% { box-shadow: 0 0 0 0 rgba(255,65,108,0); }
       }
       .promo-highlight {
         animation: promoHighlight 1.4s ease-out;
@@ -1935,6 +1953,6 @@
       Cache-busting: bumpear el `?v=` cada vez que `app.js` cambia para
       forzar a Caddy y al browser a soltar el caché viejo.
     -->
-    <script src="./app.js?v=20260803-2"></script>
+    <script src="./app.js?v=20260803-3"></script>
   </body>
 </html>
