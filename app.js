@@ -2103,17 +2103,15 @@
          </div>`
       : "";
 
-    // CTA de producto vinculado — píldora flotante centrada, sin nombre del producto
+    // CTA de producto vinculado — píldora flotante sobre la imagen
     const ctaHtml = linkedProduct
-      ? `<div class="promo-cta-wrap">
-           <button class="promo-cta" id="promo-cta-btn" aria-label="Agregar al carrito">
-             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-               <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
-               <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
-             </svg>
-             Agregar al carrito
-           </button>
-         </div>`
+      ? `<button class="promo-cta" id="promo-cta-btn" aria-label="Agregar al carrito">
+           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+             <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+             <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+           </svg>
+           Agregar al carrito
+         </button>`
       : "";
 
     overlay.innerHTML = `
@@ -2122,8 +2120,10 @@
         <div class="promo-img-wrap">
           <img src="${_escAttr(b.image_url)}" alt="${_escAttr(b.title || 'Promoción')}" loading="eager" fetchpriority="high" />
         </div>
-        ${bodyHtml}
-        ${ctaHtml}
+        <div class="promo-bottom-overlay">
+          ${bodyHtml}
+          ${ctaHtml}
+        </div>
         ${progressHtml}
       </div>`;
 

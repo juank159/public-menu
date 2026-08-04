@@ -1284,29 +1284,31 @@
       #promo-overlay.promo-visible { opacity: 1; }
       #promo-overlay.promo-hiding  { opacity: 0; pointer-events: none; }
 
+      /* ── Banner promocional ────────────────────────────────────────────
+         La imagen ocupa toda la card. El botón CTA y el texto flotan
+         sobre la imagen gracias a capas absolutas + gradiente inferior.
+      ─────────────────────────────────────────────────────────────────── */
       .promo-card {
         position: relative;
-        background: #fff;
+        background: #111;
         border-radius: 20px;
         overflow: hidden;
         max-width: 440px;
         width: 100%;
+        min-height: 340px;
         max-height: 88vh;
-        display: flex;
-        flex-direction: column;
-        box-shadow: 0 24px 60px rgba(0,0,0,0.45);
+        box-shadow: 0 24px 60px rgba(0,0,0,0.5);
         transform: scale(0.88);
         transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
       }
       #promo-overlay.promo-visible .promo-card { transform: scale(1); }
       #promo-overlay.promo-hiding  .promo-card { transform: scale(0.92); }
 
+      /* Imagen llena toda la card */
       .promo-img-wrap {
-        flex: 1;
-        overflow: hidden;
-        min-height: 180px;
-        max-height: 65vh;
-        background: #f0ece6;
+        position: absolute;
+        inset: 0;
+        background: #1a0a00;
       }
       .promo-img-wrap img {
         width: 100%;
@@ -1315,26 +1317,17 @@
         display: block;
       }
 
-      .promo-body {
-        padding: 18px 20px 14px;
-        background: #fff;
-      }
-      .promo-title {
-        font-family: 'Cormorant Garamond', serif;
-        font-size: 22px;
-        font-weight: 700;
-        color: var(--ink-dark, #2c1a0e);
-        margin: 0 0 4px;
-        line-height: 1.2;
-      }
-      .promo-subtitle {
-        font-family: 'Inter', sans-serif;
-        font-size: 13px;
-        color: var(--ink-muted, #7a6652);
-        margin: 0;
-        line-height: 1.4;
+      /* Gradiente oscuro en la mitad inferior — legibilidad del texto y botón */
+      .promo-card::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.1) 55%, transparent 100%);
+        pointer-events: none;
+        z-index: 1;
       }
 
+      /* Botón de cerrar — encima del gradiente */
       .promo-close-btn {
         position: absolute;
         top: 12px;
@@ -1353,21 +1346,47 @@
         line-height: 1;
         transition: background 0.15s;
         padding: 0;
-        z-index: 2;
+        z-index: 4;
       }
-      .promo-close-btn:hover { background: rgba(0,0,0,0.68); }
+      .promo-close-btn:hover { background: rgba(0,0,0,0.7); }
 
-      /* Contenedor centrado del botón CTA — no pega al borde */
-      .promo-cta-wrap {
+      /* Área inferior: apila texto opcional + botón CTA */
+      .promo-bottom-overlay {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 0 24px 28px;
         display: flex;
-        justify-content: center;
+        flex-direction: column;
         align-items: center;
-        padding: 20px 24px 24px;
-        background: #fff;
-        flex-shrink: 0;
+        gap: 14px;
+        z-index: 2;
+        pointer-events: none;
+      }
+      .promo-bottom-overlay > * { pointer-events: auto; }
+
+      /* Texto opcional sobre la imagen */
+      .promo-body { text-align: center; }
+      .promo-title {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 23px;
+        font-weight: 700;
+        color: #fff;
+        text-shadow: 0 1px 8px rgba(0,0,0,0.7);
+        margin: 0 0 4px;
+        line-height: 1.2;
+      }
+      .promo-subtitle {
+        font-family: 'Inter', sans-serif;
+        font-size: 13px;
+        color: rgba(255,255,255,0.88);
+        text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+        margin: 0;
+        line-height: 1.4;
       }
 
-      /* Botón CTA de producto vinculado — píldora flotante elegante */
+      /* Botón CTA — píldora flotante con gradiente vibrante */
       .promo-cta {
         display: inline-flex;
         align-items: center;
@@ -1384,24 +1403,43 @@
         font-family: 'Inter', sans-serif;
         letter-spacing: 0.5px;
         min-width: 210px;
-        box-shadow: 0 6px 22px rgba(255,65,108,0.48), 0 2px 6px rgba(0,0,0,0.14);
+        box-shadow: 0 6px 24px rgba(255,65,108,0.55), 0 2px 8px rgba(0,0,0,0.3);
         transition: transform 0.15s ease, box-shadow 0.15s ease;
         animation: promoCTAFloat 2.2s ease-in-out infinite;
         -webkit-tap-highlight-color: transparent;
       }
       .promo-cta:hover {
         transform: translateY(-3px) scale(1.03);
-        box-shadow: 0 12px 32px rgba(255,65,108,0.62), 0 3px 10px rgba(0,0,0,0.18);
+        box-shadow: 0 12px 32px rgba(255,65,108,0.65), 0 4px 12px rgba(0,0,0,0.3);
         animation: none;
       }
       .promo-cta:active {
         transform: scale(0.96);
-        box-shadow: 0 4px 12px rgba(255,65,108,0.38);
+        box-shadow: 0 4px 14px rgba(255,65,108,0.4);
         animation: none;
       }
       @keyframes promoCTAFloat {
         0%, 100% { transform: translateY(0); }
         50%      { transform: translateY(-5px); }
+      }
+
+      /* Barra de progreso — al fondo, encima de todo */
+      .promo-progress-bar {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 4px;
+        background: rgba(255,255,255,0.2);
+        z-index: 3;
+      }
+      .promo-progress-fill {
+        position: absolute;
+        inset: 0 auto 0 0;
+        height: 100%;
+        background: rgba(255,255,255,0.85);
+        width: 100%;
+        transform-origin: left center;
       }
 
       /* Destello breve en la card del producto al llegar desde el banner */
@@ -1413,22 +1451,6 @@
       .promo-highlight {
         animation: promoHighlight 1.4s ease-out;
         border-radius: 8px;
-      }
-
-      .promo-progress-bar {
-        height: 4px;
-        background: #e8e0d8;
-        position: relative;
-        overflow: hidden;
-        flex-shrink: 0;
-      }
-      .promo-progress-fill {
-        position: absolute;
-        inset: 0 auto 0 0;
-        height: 100%;
-        background: var(--gold-dark, #8b5e1f);
-        width: 100%;
-        transform-origin: left center;
       }
 
       /* Toast no bloqueante */
@@ -1953,6 +1975,6 @@
       Cache-busting: bumpear el `?v=` cada vez que `app.js` cambia para
       forzar a Caddy y al browser a soltar el caché viejo.
     -->
-    <script src="./app.js?v=20260803-3"></script>
+    <script src="./app.js?v=20260803-4"></script>
   </body>
 </html>
