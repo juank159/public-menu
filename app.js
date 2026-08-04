@@ -2073,10 +2073,10 @@
   }
 
   function _renderPromoBanner(b) {
-    // Resolver producto vinculado (si existe y está en el menú de hoy).
-    const linkedProduct = b.linked_product_id
-      ? state.products.find((p) => p.id === b.linked_product_id) || null
-      : null;
+    // Usar el objeto linked_product que viene directo del backend
+    // (ya resuelto con id + name). Así el botón CTA aparece aunque
+    // el producto no esté en el menú programado de hoy.
+    const linkedProduct = b.linked_product || null;
 
     // Crear overlay
     const overlay = document.createElement("div");
@@ -2193,29 +2193,33 @@
    * Después de cerrar el banner, navega a la página del libro donde vive
    * el producto vinculado y luego abre su modal de compra.
    */
-  function _navigateToLinkedProduct(product) {
+  function _navigateToLinkedProduct(linkedProduct) {
+    // Buscar el producto completo en el menú de hoy (tiene precio, variantes, etc.)
+    // linked_product solo viene con { id, name } desde el backend.
     const catIdx = state.categories.findIndex((c) =>
-      c.products.some((p) => p.id === product.id),
+      c.products.some((p) => p.id === linkedProduct.id),
     );
 
     if (catIdx < 0) {
-      // Producto no disponible hoy (no está en ninguna categoría activa)
-      setTimeout(() => App.toast("Producto no disponible hoy en el menú"), 420);
+      // Producto vinculado no está en la carta de hoy — avisamos al cliente.
+      setTimeout(() => App.toast("Este producto no está disponible hoy"), 420);
       return;
     }
 
+    const cat = state.categories[catIdx];
+    const fullProduct = cat.products.find((p) => p.id === linkedProduct.id);
     const pageIdx = catIdx + 1; // 0 = portada, 1..N = categorías
 
     const openModal = () => {
       // Destacar brevemente la card antes de abrir el modal
       const card = document.querySelector(
-        `[data-product-id="${CSS.escape(product.id)}"]`,
+        `[data-product-id="${CSS.escape(linkedProduct.id)}"]`,
       );
       if (card) {
         card.classList.add("promo-highlight");
         setTimeout(() => card.classList.remove("promo-highlight"), 1400);
       }
-      App.openProduct(product);
+      App.openProduct(fullProduct);
     };
 
     // Si ya estamos en esa página, abrir modal directo; si no, navegar primero.
