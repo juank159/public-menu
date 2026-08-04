@@ -1295,8 +1295,6 @@
         overflow: hidden;
         max-width: 440px;
         width: 100%;
-        min-height: 340px;
-        max-height: 88vh;
         box-shadow: 0 24px 60px rgba(0,0,0,0.5);
         transform: scale(0.88);
         transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1);
@@ -1304,16 +1302,20 @@
       #promo-overlay.promo-visible .promo-card { transform: scale(1); }
       #promo-overlay.promo-hiding  .promo-card { transform: scale(0.92); }
 
-      /* Imagen llena toda la card */
+      /* Imagen en flujo — la card toma el alto natural de la imagen.
+         max-height + object-fit:contain previene imágenes extremadamente
+         altas sin recortar: muestra la imagen completa dentro del área. */
       .promo-img-wrap {
-        position: absolute;
-        inset: 0;
-        background: #1a0a00;
+        position: relative;
+        width: 100%;
+        background: #111;
+        line-height: 0;
       }
       .promo-img-wrap img {
         width: 100%;
-        height: 100%;
-        object-fit: cover;
+        height: auto;
+        max-height: 82vh;
+        object-fit: contain;
         display: block;
       }
 
@@ -1975,6 +1977,6 @@
       Cache-busting: bumpear el `?v=` cada vez que `app.js` cambia para
       forzar a Caddy y al browser a soltar el caché viejo.
     -->
-    <script src="./app.js?v=20260803-4"></script>
+    <script src="./app.js?v=20260803-5"></script>
   </body>
 </html>
