@@ -70,8 +70,18 @@
     // Banner de promoción configurable desde la app admin.
     // { enabled, image_url, title, subtitle, display_seconds, linked_product_id }
     promoBanner: null,
+    // true si el tenant activó el radio de cobertura (settings.location) —
+    // viene en la respuesta de GET /public/menu/:code.
+    locationRequired: false,
     // Lista plana de todos los productos del menú (para lookup rápido en el banner).
     products: [],
+    // Id del intento de checkout en curso (uuid). Se genera una sola vez al
+    // arrancar un submit y se REUSA en cualquier reintento (manual, el
+    // auto-retry de SESSION_FROM_PREVIOUS_DAY, o un resubmit tras recargar
+    // la página) para que el backend pueda deduplicar. Se limpia junto con
+    // el carrito al confirmarse el pedido. Persistido en localStorage para
+    // sobrevivir un reload a mitad de un submit.
+    pendingRequestId: null,
   };
 
   // Flag de página: true si el banner ya se mostró en esta carga del documento.
@@ -144,6 +154,46 @@
     state.cart = [];
     try {
       localStorage.removeItem(`cart:${state.code}`);
+    } catch (_) {}
+    clearPendingRequestId();
+  }
+
+  // ── Idempotencia del checkout ──────────────────────────────────────
+
+  function pendingRequestKey() {
+    return `pendingRequest:${state.code}`;
+  }
+
+  /**
+   * Devuelve el id del intento de checkout en curso, creándolo (y
+   * persistiéndolo) si todavía no existe. Reusar el mismo id en cada
+   * reintento es lo que le permite al backend deduplicar — ver
+   * `PublicService._submitOrderTransaction` en el backend.
+   */
+  function getOrCreatePendingRequestId() {
+    if (state.pendingRequestId) return state.pendingRequestId;
+    try {
+      const stored = localStorage.getItem(pendingRequestKey());
+      if (stored) {
+        state.pendingRequestId = stored;
+        return stored;
+      }
+    } catch (_) {}
+    const id =
+      window.crypto && window.crypto.randomUUID
+        ? window.crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    state.pendingRequestId = id;
+    try {
+      localStorage.setItem(pendingRequestKey(), id);
+    } catch (_) {}
+    return id;
+  }
+
+  function clearPendingRequestId() {
+    state.pendingRequestId = null;
+    try {
+      localStorage.removeItem(pendingRequestKey());
     } catch (_) {}
   }
 
@@ -265,14 +315,34 @@
   }
 
   async function submitOrder(payload) {
-    const res = await fetch(`${API_BASE}/api/v1/public/orders`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(payload),
-    });
+    // Timeout: sin esto, un wifi de restaurante intermitente deja el
+    // fetch colgado indefinidamente — el usuario ve "Enviando…" para
+    // siempre y no sabe si reintentar rompe algo. 20s es generoso para
+    // una request chica en 3G lento.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
+    let res;
+    try {
+      res = await fetch(`${API_BASE}/api/v1/public/orders`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (err.name === "AbortError") {
+        const timeoutErr = new Error(
+          "La conexión tardó demasiado. Si el pedido no aparece, tocá 'Enviar pedido' de nuevo.",
+        );
+        throw timeoutErr;
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
+    }
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
       const err = new Error(body.message || `HTTP ${res.status}`);
@@ -280,6 +350,33 @@
       throw err;
     }
     return body;
+  }
+
+  /**
+   * Pide la ubicación actual del navegador. Se usa para el radio de
+   * cobertura (el backend solo la exige si el tenant lo activó, pero no
+   * cuesta nada mandarla siempre que esté disponible).
+   *
+   * Resuelve `null` (nunca rechaza) si el navegador no soporta
+   * geolocalización, el usuario niega el permiso, o tarda más de 8s —
+   * el caller decide qué hacer según si el tenant requiere ubicación.
+   */
+  function getCurrentPosition() {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        resolve(null);
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) =>
+          resolve({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+          }),
+        () => resolve(null),
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
+      );
+    });
   }
 
   async function fetchOrderStatus(code, orderNumber) {
@@ -1857,6 +1954,26 @@
       btn.textContent = "Enviando…";
 
       try {
+        // Radio de cobertura: solo le pedimos permiso de ubicación al
+        // cliente si ESTE tenant activó la restricción (viene en
+        // state.locationRequired desde GET /public/menu/:code). Sin esto,
+        // pediríamos el permiso a todo el mundo aunque el restaurante
+        // nunca haya prendido la feature.
+        let coords = null;
+        if (state.locationRequired) {
+          btn.textContent = "Confirmando ubicación…";
+          coords = await getCurrentPosition();
+          if (!coords) {
+            errEl.textContent =
+              "Para enviar tu pedido necesitamos confirmar tu ubicación. " +
+              "Activá el permiso de ubicación en tu navegador (ícono 🔒 " +
+              "junto a la dirección) e intentá de nuevo.";
+            errEl.classList.remove("hidden");
+            return;
+          }
+          btn.textContent = "Enviando…";
+        }
+
         const payload = {
           code: state.code,
           customer_name: name,
@@ -1864,6 +1981,11 @@
           notes: notes || undefined,
           // Si el cliente tiene una cuenta activa, adjuntamos su pedido.
           tab_session_id: state.activeTabSessionId || undefined,
+          // Mismo id en cada reintento (manual, auto-retry, o resubmit
+          // tras recargar) — el backend lo usa para deduplicar.
+          client_request_id: getOrCreatePendingRequestId(),
+          latitude: coords ? coords.latitude : undefined,
+          longitude: coords ? coords.longitude : undefined,
           items: state.cart.map((it) => ({
             product_id: it.product_id,
             variant_id: it.variant_id || undefined,
@@ -1899,6 +2021,20 @@
         await startTracking(orderNumber);
       } catch (err) {
         const msg = err.message || "";
+        // Radio de cobertura: el backend rechazó por falta/ubicación fuera
+        // de rango. Mostramos su mensaje (ya viene en español, explica el
+        // motivo) sin el prefijo machine-readable.
+        if (
+          msg.includes("LOCATION_REQUIRED") ||
+          msg.includes("LOCATION_OUT_OF_RANGE")
+        ) {
+          errEl.textContent = msg.replace(
+            /^LOCATION_(REQUIRED|OUT_OF_RANGE):\s*/,
+            "",
+          );
+          errEl.classList.remove("hidden");
+          return;
+        }
         // El backend indica que la tab guardada es de ayer → limpiar sesión
         // y reintentar automáticamente sin el tab_session_id.
         if (msg.includes("SESSION_FROM_PREVIOUS_DAY")) {
@@ -2282,6 +2418,10 @@
       state.destination = payload.destination || null;
       state.emptyReason = payload.empty_reason || null;
       state.promoBanner = payload.promo_banner || null;
+      // Si el tenant activó el radio de cobertura, exigimos ubicación
+      // ANTES de enviar el pedido. Si no lo activó, no le pedimos permiso
+      // de geolocalización al cliente (no tiene sentido la fricción).
+      state.locationRequired = payload.location_required === true;
 
       // Cremas/sabores disponibles (para productos de heladería).
       state.flavors = payload.flavors || [];
