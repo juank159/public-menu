@@ -5,7 +5,14 @@
 #   index.html (necesario para /m/CODE → index.html parsea el code).
 # - Headers de seguridad razonables.
 # - Compresión gzip + zstd.
-# - Cache largo para assets (no para index.html, que cambia).
+# - Cache largo SOLO para assets con nombre versionado (hash en el
+#   filename). `app.js` NO está versionado (el Dockerfile lo copia tal
+#   cual, mismo nombre en cada deploy) — cachearlo "immutable" por 1 año
+#   dejaba a los clientes con la versión vieja indefinidamente después de
+#   cada actualización, hasta que alguien hiciera un hard refresh. Ahora
+#   usa la misma política que index.html: siempre revalida contra el
+#   servidor (Caddy ya manda ETag/Last-Modified, así que revalidar es
+#   barato — normalmente un 304 sin re-descargar nada).
 
 :80 {
 	root * /srv
@@ -25,9 +32,14 @@
 		?Cache-Control "no-cache"
 	}
 
-	# Cache largo para assets versionados.
-	@assets path *.js *.css *.png *.jpg *.svg *.webp *.woff *.woff2
+	# Cache largo SOLO para binarios estáticos que sí cambian de nombre al
+	# cambiar (imágenes, fuentes) — nunca .js/.css, que hoy no están
+	# versionados.
+	@assets path *.png *.jpg *.svg *.webp *.woff *.woff2
 	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	@revalidate path *.js *.css
+	header @revalidate Cache-Control "no-cache"
 
 	# SPA fallback — sirve index.html para rutas sin archivo.
 	try_files {path} /index.html
