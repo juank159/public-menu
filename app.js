@@ -2035,23 +2035,6 @@
           errEl.classList.remove("hidden");
           return;
         }
-        // El backend detectó que ya hay un pedido de HOY con este mismo
-        // nombre (otro cliente distinto anotado igual) — le pedimos que
-        // agregue apellido o use otro nombre para que el mesero pueda
-        // diferenciar las cuentas al momento de cobrar.
-        if (msg.includes("DUPLICATE_CUSTOMER_NAME")) {
-          errEl.textContent = msg.replace(/^DUPLICATE_CUSTOMER_NAME:\s*/, "");
-          errEl.classList.remove("hidden");
-          const nameEl = $("cust-name");
-          if (nameEl) {
-            nameEl.scrollIntoView({ behavior: "smooth", block: "center" });
-            nameEl.focus();
-            nameEl.select();
-            nameEl.classList.add("cart-input--error");
-            setTimeout(() => nameEl.classList.remove("cart-input--error"), 2500);
-          }
-          return;
-        }
         // El backend indica que la tab guardada es de ayer → limpiar sesión
         // y reintentar automáticamente sin el tab_session_id.
         if (msg.includes("SESSION_FROM_PREVIOUS_DAY")) {
