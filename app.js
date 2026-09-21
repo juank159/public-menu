@@ -276,15 +276,23 @@
    * línea separada (intencional: la cocina ve cada combinación aparte).
    */
   function addLine(line) {
-    // Distinta combinación de cremas = línea separada (clave para que el
-    // backend reciba los flavor_ids correctos por línea).
+    // Distinta combinación de cremas o de extras = línea separada (clave
+    // para que el backend reciba los flavor_ids/modifiers correctos por
+    // línea, y para que la comanda no mezcle "Patacón + Coca-Cola" con
+    // "Patacón + Maltín" en una sola cantidad).
     const flavorKey = (l) => (l.flavor_ids || []).join(",");
+    const modifierKey = (l) =>
+      (l.modifiers || [])
+        .map((m) => m.modifier_id)
+        .sort()
+        .join(",");
     const existingIdx = state.cart.findIndex(
       (it) =>
         it.product_id === line.product_id &&
         (it.variant_id || "") === (line.variant_id || "") &&
         (it.special_instructions || "") === (line.special_instructions || "") &&
-        flavorKey(it) === flavorKey(line),
+        flavorKey(it) === flavorKey(line) &&
+        modifierKey(it) === modifierKey(line),
     );
     if (existingIdx >= 0) {
       state.cart[existingIdx].quantity += line.quantity;
@@ -937,6 +945,23 @@
     return (state.flavors || []).filter((f) => f.category_id === categoryId);
   }
 
+  /// Grupos de extras/adicionales activos y con al menos un extra
+  /// disponible (ej. "Bebida": Coca-Cola Cero, Maltín Polar). El backend
+  /// ya filtra is_active/is_available y ordena por sort_order.
+  function modifierGroupsForProduct(product) {
+    return (product.modifier_groups || []).filter(
+      (g) => (g.modifiers || []).length > 0,
+    );
+  }
+
+  /// Total de una línea del carrito. Los extras se suman UNA sola vez
+  /// por línea (no se multiplican por `quantity`) — mismo criterio que
+  /// usa el backend (ver `_runSubmitOrderTransaction`/`orders.service`),
+  /// así el total mostrado siempre coincide con lo que se cobra.
+  function cartLineTotal(item) {
+    return item.unit_price * item.quantity + (item.modifiers_total || 0);
+  }
+
   /// Precio mínimo a mostrar como "desde $X" cuando hay variantes.
   function minVariantPrice(variants) {
     return variants.reduce(
@@ -1042,9 +1067,10 @@
     // si tiene, abrimos el modal para que el cliente elija cuál. En ambos
     // casos `stopPropagation` evita que también dispare el onclick de la card.
     const addBtn = card.querySelector(".menu-item-add");
+    const hasModifierGroups = modifierGroupsForProduct(product).length > 0;
     addBtn.onclick = (ev) => {
       ev.stopPropagation();
-      if (hasVariants) {
+      if (hasVariants || hasModifierGroups) {
         App.openProduct(product);
       } else {
         App.quickAdd(product, addBtn);
@@ -1128,6 +1154,67 @@
       <div class="pm-unit-cards">${unitCards.join("")}</div>`;
   }
 
+  /// HTML de los grupos de extras/adicionales (ej. "Bebida": Coca-Cola
+  /// Cero, Maltín Polar, ninguna). Selección única = look de radio
+  /// (círculo); selección múltiple = look de checkbox (cuadrado) — misma
+  /// tarjeta `.pm-variant` que ya usan las variantes, reutilizada acá.
+  function modifierGroupsHtml() {
+    if (!modalProductState) return "";
+    const { modifierGroups, selectedModifiers } = modalProductState;
+    if (!modifierGroups || modifierGroups.length === 0) return "";
+
+    return modifierGroups
+      .map((group) => {
+        const isSingle = group.selection_type === "single";
+        const hint = group.is_required
+          ? `Obligatorio · elegí ${
+              isSingle ? "1" : `${group.min_selections || 1}`
+            }`
+          : "Opcional";
+        const optionsHtml = (group.modifiers || [])
+          .map((m) => {
+            const selected = !!selectedModifiers[m.id];
+            return `
+              <button
+                type="button"
+                class="pm-variant btn-press ${selected ? "is-selected" : ""}"
+                onclick="App.toggleModifier('${group.id}', '${m.id}')"
+              >
+                <span class="${isSingle ? "pm-variant-radio" : "pm-modifier-check"}"></span>
+                <span class="pm-variant-name">${escapeHtml(m.name)}</span>
+                ${
+                  m.price
+                    ? `<span class="pm-variant-price">+${fmt(m.price)}</span>`
+                    : ""
+                }
+              </button>`;
+          })
+          .join("");
+        return `
+          <div class="pm-modifier-group">
+            <div class="pm-section-label" style="margin-bottom:0">${escapeHtml(group.name)}</div>
+            <p class="pm-modifier-group-hint">${hint}</p>
+            <div class="pm-variants">${optionsHtml}</div>
+          </div>`;
+      })
+      .join("");
+  }
+
+  /// Suma de los precios de los extras seleccionados en el modal — se
+  /// agrega UNA sola vez por ítem del carrito (no se multiplica por
+  /// `quantity`), igual que hace el backend.
+  function selectedModifiersTotal() {
+    if (!modalProductState) return 0;
+    const { modifierGroups, selectedModifiers } = modalProductState;
+    let total = 0;
+    for (const group of modifierGroups || []) {
+      for (const m of group.modifiers || []) {
+        if (selectedModifiers[m.id]) total += Number(m.price) || 0;
+      }
+    }
+    return total;
+  }
+
   function renderProductModal(product) {
     const variants = normalizeVariants(product);
     const hasVariants = variants.length > 0;
@@ -1167,6 +1254,9 @@
       categoryFlavors,
       scoopCount: initialScoops,
       selectedFlavors: new Array(initialScoops).fill(""),
+      modifierGroups: modifierGroupsForProduct(product),
+      // { [modifier_id]: true } — solo guardamos los seleccionados.
+      selectedModifiers: {},
     };
 
     const variantsHtml = hasVariants
@@ -1216,6 +1306,8 @@
 
       ${variantsHtml}
 
+      <div id="prod-modifiers">${modifierGroupsHtml()}</div>
+
       <div id="prod-flavors">${flavorSectionHtml()}</div>
 
       <div class="pm-section-label">Notas para la cocina (opcional)</div>
@@ -1239,7 +1331,7 @@
 
       <button class="pm-add btn-press" onclick="App.addToCart()">
         <span>Agregar al pedido</span>
-        <span id="prod-total" class="pm-add-total">${fmt(unitPrice)}</span>
+        <span id="prod-total" class="pm-add-total">${fmt(unitPrice * 1 + selectedModifiersTotal())}</span>
       </button>
     `;
     $("modal-product").classList.remove("hidden");
@@ -1250,10 +1342,7 @@
   // ---------------------------------------------------------------
   function renderCartModal() {
     const root = $("cart-detail");
-    const total = state.cart.reduce(
-      (sum, item) => sum + item.unit_price * item.quantity,
-      0,
-    );
+    const total = state.cart.reduce((sum, item) => sum + cartLineTotal(item), 0);
 
     const closeBtn = `
       <button class="pm-close btn-press" onclick="App.closeCart(true)" aria-label="Cerrar">
@@ -1294,13 +1383,20 @@
                 : ""
             }
             ${
+              item.modifier_names && item.modifier_names.length
+                ? `<p class="cart-row-sub">+ ${escapeHtml(
+                    item.modifier_names.join(", "),
+                  )}</p>`
+                : ""
+            }
+            ${
               item.special_instructions
                 ? `<p class="cart-row-sub">“${escapeHtml(
                     item.special_instructions,
                   )}”</p>`
                 : ""
             }
-            <p class="cart-row-price">${fmt(item.unit_price)} c/u</p>
+            <p class="cart-row-price">${fmt(cartLineTotal(item))}</p>
           </div>
           <div class="cart-stepper">
             <button class="cart-step-btn" onclick="App.updateCartQty(${i}, -1)" aria-label="Quitar uno">−</button>
@@ -1375,7 +1471,7 @@
   // ---------------------------------------------------------------
   function renderCartFab() {
     const count = state.cart.reduce((s, i) => s + i.quantity, 0);
-    const total = state.cart.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+    const total = state.cart.reduce((s, i) => s + cartLineTotal(i), 0);
     const fab = $("cart-fab");
     if (count === 0) {
       fab.classList.add("hidden");
@@ -1732,7 +1828,7 @@
       // Refrescar precio mostrado + total del botón "Agregar".
       $("prod-price").textContent = fmt(variant.price);
       $("prod-total").textContent = fmt(
-        variant.price * modalProductState.quantity,
+        variant.price * modalProductState.quantity + selectedModifiersTotal(),
       );
     },
 
@@ -1743,12 +1839,56 @@
       modalProductState.selectedFlavors[slot] = flavorId || "";
     },
 
+    /// Selecciona/deselecciona un extra dentro de un grupo. En grupos de
+    /// selección única, elegir uno reemplaza al anterior (y volver a
+    /// tocar el ya elegido lo deselecciona — equivale a "ninguna"). En
+    /// grupos múltiples respeta `max_selections` si está definido.
+    toggleModifier(groupId, modifierId) {
+      if (!modalProductState) return;
+      const group = (modalProductState.modifierGroups || []).find(
+        (g) => g.id === groupId,
+      );
+      if (!group) return;
+      const groupModifierIds = new Set(
+        (group.modifiers || []).map((m) => m.id),
+      );
+      const selected = modalProductState.selectedModifiers;
+      const isSelected = !!selected[modifierId];
+
+      if (group.selection_type === "single") {
+        for (const id of groupModifierIds) delete selected[id];
+        if (!isSelected) selected[modifierId] = true;
+      } else {
+        if (isSelected) {
+          delete selected[modifierId];
+        } else {
+          const countInGroup = [...groupModifierIds].filter(
+            (id) => selected[id],
+          ).length;
+          if (group.max_selections != null && countInGroup >= group.max_selections) {
+            App.toast(`Máximo ${group.max_selections} opción(es) de "${group.name}".`);
+            return;
+          }
+          selected[modifierId] = true;
+        }
+      }
+
+      const box = $("prod-modifiers");
+      if (box) box.innerHTML = modifierGroupsHtml();
+      $("prod-total").textContent = fmt(
+        modalProductState.unit_price * modalProductState.quantity +
+          selectedModifiersTotal(),
+      );
+    },
+
     changeQty(delta) {
       if (!modalProductState) return;
       const next = Math.max(1, modalProductState.quantity + delta);
       modalProductState.quantity = next;
       $("prod-qty").textContent = String(next);
-      $("prod-total").textContent = fmt(modalProductState.unit_price * next);
+      $("prod-total").textContent = fmt(
+        modalProductState.unit_price * next + selectedModifiersTotal(),
+      );
       const sc = modalProductState.scoopCount || 0;
       if (sc > 0) {
         const needed = next * sc;
@@ -1812,6 +1952,8 @@
         selectedFlavors,
         categoryFlavors,
         scoopCount,
+        modifierGroups,
+        selectedModifiers,
       } = modalProductState;
 
       const variant =
@@ -1834,6 +1976,34 @@
         }
       }
 
+      // Extras: mismas reglas que valida el backend (grupo requerido/
+      // min/max) — defensa en profundidad, evita un viaje al servidor
+      // solo para descubrir que faltó elegir la bebida.
+      for (const group of modifierGroups || []) {
+        const groupModifierIds = new Set(
+          (group.modifiers || []).map((m) => m.id),
+        );
+        const selectedInGroup = [...groupModifierIds].filter(
+          (id) => selectedModifiers[id],
+        ).length;
+        if (group.is_required && selectedInGroup < (group.min_selections || 1)) {
+          App.toast(`Elegí una opción de "${group.name}" antes de agregar.`);
+          return;
+        }
+      }
+
+      const modifiersPayload = [];
+      const modifierNames = [];
+      for (const group of modifierGroups || []) {
+        for (const m of group.modifiers || []) {
+          if (selectedModifiers[m.id]) {
+            modifiersPayload.push({ modifier_id: m.id, quantity: 1 });
+            modifierNames.push(m.name);
+          }
+        }
+      }
+      const modifiersTotal = selectedModifiersTotal();
+
       // Múltiples unidades con cremas: un ítem de carrito por unidad.
       if (scoops > 0 && quantity > 1) {
         for (let unit = 0; unit < quantity; unit++) {
@@ -1853,6 +2023,9 @@
             special_instructions: special_instructions || "",
             flavor_ids: [...unitFlavors],
             flavor_names: unitFlavorNames,
+            modifiers: modifiersPayload.length ? [...modifiersPayload] : undefined,
+            modifier_names: modifierNames.length ? [...modifierNames] : undefined,
+            modifiers_total: modifiersTotal || undefined,
           });
         }
         persistCart();
@@ -1877,6 +2050,9 @@
         special_instructions: special_instructions || "",
         flavor_ids: scoops > 0 ? [...selectedFlavors] : undefined,
         flavor_names: scoops > 0 ? flavorNames : undefined,
+        modifiers: modifiersPayload.length ? modifiersPayload : undefined,
+        modifier_names: modifierNames.length ? modifierNames : undefined,
+        modifiers_total: modifiersTotal || undefined,
       });
       persistCart();
       renderCartFab();
@@ -1994,6 +2170,8 @@
             special_instructions: it.special_instructions || undefined,
             flavor_ids:
               it.flavor_ids && it.flavor_ids.length ? it.flavor_ids : undefined,
+            modifiers:
+              it.modifiers && it.modifiers.length ? it.modifiers : undefined,
           })),
         };
 

@@ -1135,6 +1135,41 @@
         font-variant-numeric: tabular-nums;
       }
 
+      /* Extras/adicionales (modifier_groups) — mismo look que las
+         variantes; el círculo (single) o el cuadrado (multiple) marca
+         la selección. */
+      .pm-modifier-group { margin-bottom: 6px; }
+      .pm-modifier-group-title {
+        font-family: 'Cormorant Garamond', serif;
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--ink-primary);
+        margin-bottom: 6px;
+      }
+      .pm-modifier-group-hint {
+        font-family: 'Inter', sans-serif;
+        font-size: 11px;
+        color: var(--ink-muted);
+        margin: -2px 0 8px;
+      }
+      .pm-modifier-check {
+        width: 20px;
+        height: 20px;
+        border-radius: 6px;
+        border: 2px solid rgba(120, 80, 20, 0.35);
+        flex-shrink: 0;
+        position: relative;
+      }
+      .pm-variant.is-selected .pm-modifier-check { border-color: var(--gold-dark); }
+      .pm-variant.is-selected .pm-modifier-check::after {
+        content: '';
+        position: absolute;
+        inset: 3px 3px 5px 3px;
+        border-left: 2px solid var(--gold-dark);
+        border-bottom: 2px solid var(--gold-dark);
+        transform: rotate(-45deg);
+      }
+
       .pm-notes {
         width: 100%;
         border: 1px solid rgba(120, 80, 20, 0.3);
