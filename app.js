@@ -1257,6 +1257,18 @@
       selectedModifiers: {},
     };
 
+    // Preseleccionar la opción gratis de cada grupo (si tiene una) — el
+    // backend ya ordena los extras por precio ascendente, así que la
+    // primera de la lista es la más barata. Esto evita que el cliente
+    // tenga que tocar algo para conservar el precio base, y de paso
+    // deja los grupos obligatorios ya satisfechos por defecto.
+    for (const group of modalProductState.modifierGroups) {
+      const cheapest = (group.modifiers || [])[0];
+      if (cheapest && Number(cheapest.price) === 0) {
+        modalProductState.selectedModifiers[cheapest.id] = true;
+      }
+    }
+
     const variantsHtml = hasVariants
       ? `
         <div class="pm-section-label">Elegí una opción</div>
@@ -1300,7 +1312,7 @@
           ? `<p class="pm-desc">${escapeHtml(product.description)}</p>`
           : ""
       }
-      <div class="pm-price" id="prod-price">${fmt(unitPrice)}</div>
+      <div class="pm-price" id="prod-price">${fmt(unitPrice + selectedModifiersTotal())}</div>
 
       ${variantsHtml}
 
@@ -1824,7 +1836,7 @@
       if (flavorsBox) flavorsBox.innerHTML = flavorSectionHtml();
 
       // Refrescar precio mostrado + total del botón "Agregar".
-      $("prod-price").textContent = fmt(variant.price);
+      $("prod-price").textContent = fmt(variant.price + selectedModifiersTotal());
       $("prod-total").textContent = fmt(
         variant.price * modalProductState.quantity + selectedModifiersTotal(),
       );
@@ -1873,6 +1885,9 @@
 
       const box = $("prod-modifiers");
       if (box) box.innerHTML = modifierGroupsHtml();
+      $("prod-price").textContent = fmt(
+        modalProductState.unit_price + selectedModifiersTotal(),
+      );
       $("prod-total").textContent = fmt(
         modalProductState.unit_price * modalProductState.quantity +
           selectedModifiersTotal(),
