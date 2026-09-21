@@ -1182,11 +1182,9 @@
               >
                 <span class="${isSingle ? "pm-variant-radio" : "pm-modifier-check"}"></span>
                 <span class="pm-variant-name">${escapeHtml(m.name)}</span>
-                ${
-                  m.price
-                    ? `<span class="pm-variant-price">+${fmt(m.price)}</span>`
-                    : ""
-                }
+                <span class="pm-variant-price">${
+                  m.price ? `+${fmt(m.price)}` : "Gratis"
+                }</span>
               </button>`;
           })
           .join("");
