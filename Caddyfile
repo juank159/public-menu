@@ -5,14 +5,15 @@
 #   index.html (necesario para /m/CODE → index.html parsea el code).
 # - Headers de seguridad razonables.
 # - Compresión gzip + zstd.
-# - Cache largo SOLO para assets con nombre versionado (hash en el
-#   filename). `app.js` NO está versionado (el Dockerfile lo copia tal
-#   cual, mismo nombre en cada deploy) — cachearlo "immutable" por 1 año
-#   dejaba a los clientes con la versión vieja indefinidamente después de
-#   cada actualización, hasta que alguien hiciera un hard refresh. Ahora
-#   usa la misma política que index.html: siempre revalida contra el
-#   servidor (Caddy ya manda ETag/Last-Modified, así que revalidar es
-#   barato — normalmente un 304 sin re-descargar nada).
+# - Cache largo para assets con nombre versionado (hash en el filename).
+#   El Dockerfile ahora renombra app.js a app.<hash-del-contenido>.js en
+#   cada build y actualiza la referencia en index.html — como el NOMBRE
+#   cambia solo cuando cambia el contenido, cachear "immutable" por 1 año
+#   es seguro: un cliente nunca puede terminar con la copia vieja de un
+#   archivo bajo una URL que ahora apunta a algo distinto. index.html
+#   (que sí conserva siempre el mismo nombre) es el único que necesita
+#   revalidar siempre — es lo que le dice al cliente CUÁL es el nombre
+#   vigente de app.js en cada visita.
 
 :80 {
 	root * /srv
@@ -32,14 +33,11 @@
 		?Cache-Control "no-cache"
 	}
 
-	# Cache largo SOLO para binarios estáticos que sí cambian de nombre al
-	# cambiar (imágenes, fuentes) — nunca .js/.css, que hoy no están
-	# versionados.
-	@assets path *.png *.jpg *.svg *.webp *.woff *.woff2
+	# Cache largo para binarios estáticos (imágenes, fuentes) y para el
+	# JS con nombre hasheado (app.<hash>.js) — todos son "versionados":
+	# si el contenido cambia, la URL cambia con él.
+	@assets path *.png *.jpg *.svg *.webp *.woff *.woff2 *.js
 	header @assets Cache-Control "public, max-age=31536000, immutable"
-
-	@revalidate path *.js *.css
-	header @revalidate Cache-Control "no-cache"
 
 	# SPA fallback — sirve index.html para rutas sin archivo.
 	try_files {path} /index.html

@@ -2009,9 +2009,13 @@
     </section>
 
     <!--
-      Cache-busting: bumpear el `?v=` cada vez que `app.js` cambia para
-      forzar a Caddy y al browser a soltar el caché viejo.
+      Cache-busting AUTOMÁTICO: el Dockerfile reemplaza "app.js" acá por
+      "app.<hash-del-contenido>.js" en cada build — no hace falta acordarse
+      de bumpear nada a mano (eso fallaba: quedó pegado en "20260803-5"
+      durante toda esta sesión pese a que app.js cambió varias veces). Si
+      ves literalmente "app.js" en producción, el build no corrió el paso
+      de hashing — revisar el Dockerfile.
     -->
-    <script src="./app.js?v=20260803-5"></script>
+    <script src="./app.js"></script>
   </body>
 </html>
